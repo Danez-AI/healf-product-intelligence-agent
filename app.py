@@ -66,10 +66,21 @@ if user_input:
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+            if product:
+                product_ctx = (
+                    f"Currently loaded product: '{product.title}' by {product.brand} "
+                    f"(URL: {product.url}, rating: {product.rating_value}/5 from "
+                    f"{product.rating_count} reviews). "
+                    f"Ingredients: {', '.join(product.ingredients) or 'not extracted'}. "
+                    f"Claims: {', '.join(product.claims) or 'not extracted'}.\n\n"
+                )
+                user_message = product_ctx + user_input
+            else:
+                user_message = user_input
             answer, trace = run_agent_turn(
                 client=client,
                 model="claude-sonnet-4-6",
-                user_message=user_input,
+                user_message=user_message,
                 product=product,
             )
             st.markdown(answer)
