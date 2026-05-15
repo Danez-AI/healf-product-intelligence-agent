@@ -1,0 +1,9 @@
+{"id":"eval-001","tool":"check_field","fixture":"lmnt","input":{"field":"ingredient","value":"sodium"},"judge":"exact","expect":{"path":"present","equals":true}}
+{"id":"eval-002","tool":"check_field","fixture":"lmnt","input":{"field":"ingredient","value":"unicorn dust"},"judge":"exact","expect":{"path":"present","equals":false}}
+{"id":"eval-003","tool":"benchmark_against_category","fixture":"lmnt","input":{"k":3},"judge":"len_gte","expect":{"path":"neighbours","min":1}}
+{"id":"eval-004","tool":"cluster_review_themes","fixture":"lmnt","input":{"polarity_filter":"all"},"judge":"len_gte","expect":{"path":"themes","min":1}}
+{"id":"eval-005","tool":"evaluate_listing_quality","fixture":"lmnt","input":{},"judge":"len_gte","expect":{"path":"scores","min":3}}
+{"id":"eval-006","tool":"score_images","fixture":"lmnt","input":{},"judge":"contains","expect":{"path":"summary","substring":"image"}}
+{"id":"eval-007","tool":"check_consistency","fixture":"lmnt","input":{},"judge":"len_gte","expect":{"path":"findings","min":0}}
+{"id":"eval-008","tool":"compare_products","fixture":null,"input":{"urls":["https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack","https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack"]},"judge":"len_gte","expect":{"path":"rows","min":2}}
+{"id":"eval-009","tool":"draft_rewrite","fixture":"lmnt","input":{"gaps":["ingredient transparency","claim grounding"]},"judge":"llm_rubric","expect":{"rubric":"Returns a coherent, Healf-voice product description (≥40 words) that names at least one ingredient gap and avoids invented claims.","min_score":3}}
