@@ -47,3 +47,31 @@ def test_stratified_sample_returns_balanced_buckets() -> None:
     assert len(sample["Skincare"]) >= 3
     assert len(sample["Electrolytes"]) >= 3
     assert len(sample["Supplements"]) >= 3
+
+
+from unittest.mock import MagicMock
+
+from healf_agent.corpus import embed_texts, build_corpus_text
+
+
+def test_build_corpus_text_concatenates_title_description_claims() -> None:
+    text = build_corpus_text(
+        title="Creatine",
+        description="Micronised creatine.",
+        claims=["5g per serving", "no fillers"],
+    )
+    assert "Creatine" in text
+    assert "Micronised" in text
+    assert "5g per serving" in text
+
+
+def test_embed_texts_uses_openai_client(monkeypatch) -> None:
+    fake_client = MagicMock()
+    fake_client.embeddings.create.return_value = MagicMock(
+        data=[MagicMock(embedding=[0.1, 0.2, 0.3]) for _ in range(2)]
+    )
+    vecs = embed_texts(["hello", "world"], client=fake_client, model="text-embedding-3-small")
+    assert vecs == [[0.1, 0.2, 0.3], [0.1, 0.2, 0.3]]
+    fake_client.embeddings.create.assert_called_once_with(
+        model="text-embedding-3-small", input=["hello", "world"]
+    )

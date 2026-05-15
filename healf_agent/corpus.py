@@ -52,3 +52,17 @@ def stratified_sample(
         take = min(share, len(leftover))
         result[bucket].extend(rng.sample(leftover, take))
     return result
+
+
+def build_corpus_text(*, title: str, description: str, claims: Iterable[str]) -> str:
+    """Concatenate product title, description, and claims into a single corpus text."""
+    parts = [title, description, "; ".join(claims)]
+    return "\n".join(p for p in parts if p)
+
+
+def embed_texts(texts: list[str], *, client, model: str = "text-embedding-3-small") -> list[list[float]]:
+    """Embed a list of texts using OpenAI embeddings API."""
+    if not texts:
+        return []
+    resp = client.embeddings.create(model=model, input=texts)
+    return [d.embedding for d in resp.data]
