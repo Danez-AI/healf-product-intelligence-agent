@@ -186,3 +186,16 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 **Applies to:** Any session that runs Streamlit smoke tests
 
 ---
+
+## G-20: `--filter eval-00` does NOT exclude eval-009 — substring match catches "00" in "009"
+
+**Symptom:** Running `python -m evals.runner --filter eval-00 --db healf.sqlite` was intended to match eval-001 through eval-008 while skipping eval-009 (the LLM-rubric case). Instead, all 9 cases ran. eval-009 failed with `dispatch error: 'ANTHROPIC_API_KEY'` and a score-0.0 row was still persisted.  
+**Root cause:** The `--filter` argument performs a plain substring match (`args.filter in c["id"]`). The string `"eval-00"` is a substring of `"eval-009"` because "009" contains "00". The naming scheme `eval-001 … eval-009` does not create a natural partition under substring matching.  
+**Fix options:**  
+1. Rename the LLM-rubric case to `eval-010` (two-digit suffix breaks the substring overlap).  
+2. Use a more specific filter prefix, e.g. `--filter eval-00` won't work; instead filter on the tool name or add a `"tags"` field to golden.jsonl and filter on that.  
+3. Change the runner's `--filter` to support a regex or a comma-separated list of IDs.  
+**Current workaround:** Accept that eval-009 runs during `--filter eval-00` smoke tests; it will always score 0.0 when `ANTHROPIC_API_KEY` is absent, which is a known-acceptable failure.  
+**Applies to:** `evals/runner.py` (`--filter` flag), `evals/golden.jsonl` (ID naming scheme)
+
+---
