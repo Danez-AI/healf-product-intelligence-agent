@@ -42,13 +42,21 @@ def health() -> dict[str, str]:
 @app.post("/audit", response_model=AuditResponse)
 def audit(req: AuditRequest) -> AuditResponse:
     url_str = str(req.url)
-    if "healf.com" not in url_str:
+    from urllib.parse import urlparse as _urlparse
+    _host = (_urlparse(url_str).hostname or "")
+    if _host != "healf.com" and not _host.endswith(".healf.com"):
         raise HTTPException(status_code=400, detail="URL must be on healf.com")
 
-    fetched = _dispatch(name="fetch_product", arguments={"url": url_str}, product=None)
-    product = Product.model_validate(fetched)
+    try:
+        fetched = _dispatch(name="fetch_product", arguments={"url": url_str}, product=None)
+        product = Product.model_validate(fetched)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Could not fetch/parse product: {exc}") from exc
 
-    eval_report = _dispatch(name="evaluate_listing_quality", arguments={}, product=product)
+    try:
+        eval_report = _dispatch(name="evaluate_listing_quality", arguments={}, product=product)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"evaluate_listing_quality failed: {exc}") from exc
     scores = eval_report.get("scores", [])
     avg = sum(s["score"] for s in scores) / len(scores) if scores else 0.0
     gaps = eval_report.get("gaps", [])
@@ -57,7 +65,9 @@ def audit(req: AuditRequest) -> AuditResponse:
     hitl_id: Optional[int] = None
     if req.draft and gaps:
         drafted = _dispatch(name="draft_rewrite", arguments={"gaps": gaps}, product=product)
-        draft_text = drafted.get("drafted_description")
+        draft_text = drafted.get("drafted_description") or None
+        if not draft_text:
+            raise HTTPException(status_code=502, detail="draft_rewrite returned empty text")
         queued = _dispatch(
             name="enqueue_hitl",
             arguments={
