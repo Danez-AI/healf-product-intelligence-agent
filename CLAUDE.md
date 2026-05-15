@@ -78,7 +78,7 @@ healf_agent/
 ├── storage.py           ✅ Done — SQLite CRUD for all 6 tables
 ├── agent.py             ✅ Done — Anthropic tool-use loop + SYSTEM_PROMPT
 ├── corpus.py            ✅ Done — Sitemap → sample → embed → kNN
-├── voice.py             🔲 Wave 10 — Healf-voice prompts
+├── voice.py             ✅ Done — Healf-voice prompts (Wave 10)
 └── tools/
     ├── __init__.py      ✅ Done — TOOL_SCHEMAS + dispatcher
     ├── navigate.py      ✅ Done — httpx fetch + Playwright fallback
@@ -97,12 +97,13 @@ tests/
 ├── fixtures/
 │   └── lmnt-recharge-electrolytes-variety-pack.html  ✅ (452KB real PDP)
 ├── test_models.py       ✅ 4 tests
-├── test_storage.py      ✅ 4 tests
+├── test_storage.py      ✅ 7 tests (+3 HITL CRUD)
 ├── test_navigate.py     ✅ 3 tests
 ├── test_ingest.py       ✅ 3 tests
 ├── test_reviews.py      ✅ 1 test
 ├── test_corpus.py       ✅ 5 tests
 ├── test_review_themes.py ✅ 2 tests
+├── test_voice.py        ✅ 4 tests (Wave 10 — new)
 └── test_agent.py        ✅ 13 tests (Tier 1: 5, Tier 2: 8)
 
 app.py                   ✅ Done — Streamlit chat shell (smoke tested)
@@ -111,7 +112,7 @@ scripts/build_corpus.py  ✅ Done — CLI for corpus rebuild
 docs/gotchas.md          ✅ Running log of surprises and fixes
 mcp_server.py            🔲 Wave 12
 webhook.py               🔲 Wave 13
-pages/hitl.py            🔲 Wave 10
+pages/hitl.py            ✅ Done — Streamlit HITL review queue (Wave 10)
 evals/golden.jsonl       🔲 Wave 11
 evals/runner.py          🔲 Wave 11
 n8n/healf-catalog-audit.json  🔲 Wave 13
@@ -139,7 +140,15 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 | 8 — Vision + consistency | `score_images`, `check_consistency` | ✅ Complete |
 | 9 — Compare + act | `compare_products`, `draft_rewrite`, `enqueue_hitl` | ✅ Complete |
 
-**Tier 3 (AI-as-colleague proof) — Wave 10–13 — Next**
+**Tier 3 (AI-as-colleague proof) — Wave 10–13 — In Progress**
+
+| Wave | Tasks | Status |
+|------|-------|--------|
+| 10 — HITL + voice | `pages/hitl.py`, `healf_agent/voice.py` | ✅ Complete — 42 tests passing |
+| 11 — Evals | `evals/golden.jsonl`, `evals/runner.py` | 🔲 Next |
+| 12 — MCP server | `mcp_server.py` | 🔲 Planned |
+| 13 — n8n webhook | `webhook.py`, `n8n/healf-catalog-audit.json` | 🔲 Planned |
+
 **Tier 4 (Polish) — Wave 14 — Planned**
 
 ## Key Decisions
@@ -159,10 +168,10 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 ## Workflow for Next Session
 
 1. Resume in the worktree: `C:\Users\Daran\AI\Healf AI Agent\.claude\worktrees\feat-healf-agent`
-2. Verify tests: `python -m uv run pytest -v` (should be 35 passing)
-3. **Manual smoke test first:** launch Streamlit, fetch LMNT, ask "what should I improve?" — verify tool trace includes benchmark → evaluate → draft_rewrite
-4. Use `superpowers:subagent-driven-development` to continue Tier 3 from **Wave 10** (HITL page)
-5. Author Plan 3 before Wave 10
+2. Verify tests: `python -m uv run pytest -v` (should be 42 passing)
+3. **Manual smoke test (Wave 10.5):** launch Streamlit, fetch LMNT, ask "draft a rewrite addressing missing ingredients and claims" → verify draft appears in HITL page sidebar nav
+4. Use `superpowers:subagent-driven-development` to continue Tier 3 from **Wave 11** (golden-set evals)
+5. Author Plan 4 before Wave 11
 
 ## Reference Product (LMNT — golden fixture)
 
