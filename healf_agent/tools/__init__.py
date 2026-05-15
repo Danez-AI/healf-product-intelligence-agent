@@ -147,10 +147,16 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
             product=product, storage=storage, openai_client=openai_client
         )
         neighbours = neighbours_result["neighbours"]
+        # Load stored review themes for this product
+        theme_rows = storage.conn.execute(
+            "SELECT polarity, label, summary FROM review_themes WHERE product_gid=?",
+            (product.gid,)
+        ).fetchall()
+        themes = [{"polarity": r["polarity"], "label": r["label"], "summary": r["summary"]} for r in theme_rows]
         report = evaluate_listing_quality(
             product=product,
             neighbours=neighbours,
-            themes=[],
+            themes=themes,
             anthropic_client=anthropic_client,
         )
         return report.model_dump(mode="json")

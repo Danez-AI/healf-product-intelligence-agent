@@ -140,11 +140,16 @@ class Storage:
         )
         self.conn.commit()
 
-    def knn(self, *, product_type: str, query_vec: list[float], k: int = 5) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT handle, title, text, embedding FROM corpus WHERE product_type=?",
-            (product_type,),
-        ).fetchall()
+    def knn(self, *, product_type: str | None, query_vec: list[float], k: int = 5) -> list[dict]:
+        if product_type is not None:
+            rows = self.conn.execute(
+                "SELECT handle, title, text, embedding FROM corpus WHERE product_type=?",
+                (product_type,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT handle, title, text, embedding FROM corpus",
+            ).fetchall()
         scored = [
             {
                 "handle": r["handle"],

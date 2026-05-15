@@ -25,10 +25,10 @@ def benchmark_against_category(
     resp = openai_client.embeddings.create(model=embed_model, input=[query_text])
     query_vec = resp.data[0].embedding
 
-    # Try type-filtered first; fall back to global if empty (Gotcha G-04)
+    # Try type-filtered first; fall back to full corpus if empty (Gotcha G-04)
     neighbours = storage.knn(product_type=product.product_type, query_vec=query_vec, k=k)
     if not neighbours:
-        neighbours = storage.knn(product_type="Unknown", query_vec=query_vec, k=k)
+        neighbours = storage.knn(product_type=None, query_vec=query_vec, k=k)
 
     return {
         "product_handle": product.handle,
