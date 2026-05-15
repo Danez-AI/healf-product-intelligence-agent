@@ -74,7 +74,7 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
 
         if product is None:
             raise ValueError("cluster_review_themes requires a current product")
-        storage = Storage(Path("healf.sqlite"))
+        storage = Storage(Path(os.environ.get("HEALF_DB", "healf.sqlite")))
         storage.init_schema()
         reviews = storage.get_reviews(product.gid)
         openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -85,7 +85,8 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
             openai_client=openai_client,
             anthropic_client=anthropic_client,
         )
-        # Persist themes
+        # Persist themes (clear existing first to prevent duplicate rows)
+        storage.conn.execute("DELETE FROM review_themes WHERE product_gid=?", (product.gid,))
         for t in themes:
             storage.conn.execute(
                 "INSERT INTO review_themes(product_gid, polarity, label, summary, review_ids, weight)"

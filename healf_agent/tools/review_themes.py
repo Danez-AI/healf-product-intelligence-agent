@@ -8,6 +8,8 @@ from typing import Any
 from healf_agent.corpus import embed_texts
 from healf_agent.models import Review, ReviewTheme
 
+_VALID_POLARITIES = {"positive", "negative", "neutral"}
+
 _LABEL_PROMPT = """\
 You are analysing customer reviews for a health product. Below are review clusters.
 For each cluster, return a JSON array of objects with keys:
@@ -91,9 +93,12 @@ def cluster_review_themes(
     for i, (cid, revs) in enumerate(clusters.items()):
         meta = labelled[i] if i < len(labelled) else {}
         total = len(reviews)
+        polarity = meta.get("polarity", "neutral")
+        if polarity not in _VALID_POLARITIES:
+            polarity = "neutral"
         themes.append(ReviewTheme(
             product_gid=product_gid,
-            polarity=meta.get("polarity", "neutral"),
+            polarity=polarity,
             label=meta.get("label", f"Theme {cid}"),
             summary=meta.get("summary", ""),
             review_ids=[r.review_id for r in revs],
