@@ -66,6 +66,36 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "description": "Cross-validate the product's ingredients, claims, description, and review themes for inconsistencies.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
+    {
+        "name": "compare_products",
+        "description": "Compare 2-4 Healf product URLs side-by-side on price, rating, ingredients, images.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"urls": {"type": "array", "items": {"type": "string"}}},
+            "required": ["urls"],
+        },
+    },
+    {
+        "name": "draft_rewrite",
+        "description": "Draft an improved product description in Healf voice, addressing identified gaps.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"gaps": {"type": "array", "items": {"type": "string"}}},
+            "required": ["gaps"],
+        },
+    },
+    {
+        "name": "enqueue_hitl",
+        "description": "Send a drafted rewrite to the human-in-the-loop approval queue.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "drafted_description": {"type": "string"},
+                "gap_summary": {"type": "string"},
+            },
+            "required": ["drafted_description", "gap_summary"],
+        },
+    },
 ]
 
 
@@ -198,4 +228,50 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
         themes = [{"polarity": r["polarity"], "label": r["label"], "summary": r["summary"]} for r in theme_rows]
         report = check_consistency(product=product, themes=themes, anthropic_client=anthropic_client)
         return report.model_dump(mode="json")
+    if name == "compare_products":
+        from healf_agent.tools.compare import compare_products
+        from healf_agent.tools.navigate import fetch_product_page
+        from healf_agent.tools.ingest import parse_product
+
+        urls = arguments.get("urls", [])
+        if len(urls) < 2:
+            raise ValueError("compare_products requires at least 2 URLs")
+        products_to_compare = []
+        for url in urls[:4]:
+            html = fetch_product_page(url)
+            p = parse_product(html, url=url)
+            if p:
+                products_to_compare.append(p)
+        if len(products_to_compare) < 2:
+            raise ValueError("could not fetch at least 2 valid products to compare")
+        result = compare_products(products=products_to_compare)
+        return result.model_dump(mode="json")
+    if name == "draft_rewrite":
+        from healf_agent.tools.act import draft_rewrite
+        import os
+        from anthropic import Anthropic
+
+        if product is None:
+            raise ValueError("draft_rewrite requires a current product")
+        gaps = arguments.get("gaps", [])
+        anthropic_client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        text = draft_rewrite(product=product, gaps=gaps, anthropic_client=anthropic_client)
+        return {"drafted_description": text, "product_handle": product.handle}
+    if name == "enqueue_hitl":
+        from healf_agent.tools.act import enqueue_hitl
+        from healf_agent.storage import Storage
+        from pathlib import Path
+        import os
+
+        if product is None:
+            raise ValueError("enqueue_hitl requires a current product")
+        storage = Storage(Path(os.environ.get("HEALF_DB", "healf.sqlite")))
+        storage.init_schema()
+        entry_id = enqueue_hitl(
+            product=product,
+            drafted_description=arguments.get("drafted_description", ""),
+            gap_summary=arguments.get("gap_summary", ""),
+            storage=storage,
+        )
+        return {"entry_id": entry_id, "status": "pending", "product_handle": product.handle}
     raise ValueError(f"unknown tool: {name}")

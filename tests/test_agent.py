@@ -1,5 +1,7 @@
 from healf_agent.tools.field import check_field
 from healf_agent.models import Product
+from healf_agent.tools.compare import compare_products
+from healf_agent.tools.act import draft_rewrite, enqueue_hitl
 
 
 def _p(**overrides) -> Product:
@@ -201,3 +203,48 @@ def test_check_consistency_flags_unsupported_claim(monkeypatch) -> None:
     from healf_agent.models import ConsistencyReport
     report = check_consistency(product=p, themes=[], anthropic_client=fake_anthropic)
     assert isinstance(report, ConsistencyReport)
+
+
+def test_compare_products_returns_rows(monkeypatch) -> None:
+    p1 = _p(handle="a", title="Product A", price_gbp=10.0, rating_value=4.5, rating_count=50)
+    p2 = _p(handle="b", title="Product B", price_gbp=15.0, rating_value=4.0, rating_count=20)
+    result = compare_products(products=[p1, p2])
+    from healf_agent.models import Comparison
+    assert isinstance(result, Comparison)
+    assert len(result.rows) >= 1
+    assert len(result.handles) == 2
+
+
+def test_draft_rewrite_returns_string(monkeypatch) -> None:
+    fake_anthropic = MagicMock()
+    fake_anthropic.messages.create.return_value = MagicMock(
+        content=[MagicMock(type="text", text="Improved product description here.")]
+    )
+    p = _p()
+    result = draft_rewrite(
+        product=p,
+        gaps=["add serving size", "mention electrolyte amounts"],
+        anthropic_client=fake_anthropic,
+    )
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_enqueue_hitl_persists_to_storage(monkeypatch) -> None:
+    import tempfile
+    from pathlib import Path
+    from healf_agent.storage import Storage
+
+    tmp = Path(tempfile.mkdtemp()) / "test.sqlite"
+    s = Storage(tmp)
+    s.init_schema()
+    p = _p()
+    entry_id = enqueue_hitl(
+        product=p,
+        drafted_description="Better description.",
+        gap_summary="Missing serving size.",
+        storage=s,
+    )
+    assert isinstance(entry_id, int)
+    row = s.conn.execute("SELECT * FROM hitl_queue WHERE id=?", (entry_id,)).fetchone()
+    assert row is not None
