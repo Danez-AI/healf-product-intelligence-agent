@@ -53,3 +53,37 @@ def test_dispatch_check_field_returns_dict(monkeypatch) -> None:
         product=p,
     )
     assert out["present"] is True
+
+
+from unittest.mock import MagicMock
+
+from healf_agent.agent import run_agent_turn
+
+
+def test_agent_loop_dispatches_tool_then_finalises() -> None:
+    fake_client = MagicMock()
+
+    # Turn 1: model asks to call check_field
+    tool_use_block = MagicMock()
+    tool_use_block.type = "tool_use"
+    tool_use_block.id = "tu_1"
+    tool_use_block.name = "check_field"
+    tool_use_block.input = {"field": "ingredient", "value": "sodium"}
+    fake_client.messages.create.side_effect = [
+        MagicMock(stop_reason="tool_use", content=[tool_use_block]),
+        MagicMock(
+            stop_reason="end_turn",
+            content=[MagicMock(type="text", text="Yes, sodium is listed.")],
+        ),
+    ]
+
+    p = _p()
+    answer, trace = run_agent_turn(
+        client=fake_client,
+        model="claude-sonnet-4-6",
+        system="be useful",
+        user_message="does this have sodium?",
+        product=p,
+    )
+    assert "sodium" in answer.lower()
+    assert any(step["tool"] == "check_field" for step in trace)
