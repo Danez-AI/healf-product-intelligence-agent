@@ -149,3 +149,30 @@ def test_evaluate_listing_quality_returns_eval_report(monkeypatch) -> None:
     assert isinstance(report, EvalReport)
     assert report.average() > 0
     assert len(report.gaps) >= 1
+
+
+from healf_agent.tools.vision import score_images
+
+
+def test_score_images_returns_scores(monkeypatch) -> None:
+    fake_gemini = MagicMock()
+    fake_gemini.models.generate_content.return_value = MagicMock(
+        text='[{"url": "https://cdn.shopify.com/x.jpg", "clarity": 4, "lifestyle": false, "label_legible": true, "overall": 4, "notes": "Clean pack shot"}]'
+    )
+    p = _p()
+    result = score_images(product=p, gemini_client=fake_gemini)
+    assert "image_scores" in result
+
+
+from healf_agent.tools.consistency import check_consistency
+
+
+def test_check_consistency_flags_unsupported_claim(monkeypatch) -> None:
+    fake_anthropic = MagicMock()
+    fake_anthropic.messages.create.return_value = MagicMock(
+        content=[MagicMock(type="text", text='[{"kind": "claim_unsupported", "detail": "zero sugar claim not in ingredients", "evidence": "sugar-free not listed"}]')]
+    )
+    p = _p(claims=["zero sugar", "keto friendly"])
+    from healf_agent.models import ConsistencyReport
+    report = check_consistency(product=p, themes=[], anthropic_client=fake_anthropic)
+    assert isinstance(report, ConsistencyReport)

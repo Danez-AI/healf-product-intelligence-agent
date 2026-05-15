@@ -56,6 +56,16 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "description": "Score the current product listing on 5 quality axes using Claude, grounded in corpus neighbours and review themes.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
+    {
+        "name": "score_images",
+        "description": "Score product images using Gemini Vision rubric (clarity, lifestyle shots, label legibility).",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "check_consistency",
+        "description": "Cross-validate the product's ingredients, claims, description, and review themes for inconsistencies.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
 ]
 
 
@@ -159,5 +169,33 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
             themes=themes,
             anthropic_client=anthropic_client,
         )
+        return report.model_dump(mode="json")
+    if name == "score_images":
+        from healf_agent.tools.vision import score_images
+        from google import genai
+        import os
+
+        if product is None:
+            raise ValueError("score_images requires a current product")
+        gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        return score_images(product=product, gemini_client=gemini_client)
+    if name == "check_consistency":
+        from healf_agent.tools.consistency import check_consistency
+        from healf_agent.storage import Storage
+        from pathlib import Path
+        import os
+        from anthropic import Anthropic
+
+        if product is None:
+            raise ValueError("check_consistency requires a current product")
+        anthropic_client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        storage = Storage(Path(os.environ.get("HEALF_DB", "healf.sqlite")))
+        storage.init_schema()
+        theme_rows = storage.conn.execute(
+            "SELECT polarity, label, summary FROM review_themes WHERE product_gid=?",
+            (product.gid,)
+        ).fetchall()
+        themes = [{"polarity": r["polarity"], "label": r["label"], "summary": r["summary"]} for r in theme_rows]
+        report = check_consistency(product=product, themes=themes, anthropic_client=anthropic_client)
         return report.model_dump(mode="json")
     raise ValueError(f"unknown tool: {name}")
