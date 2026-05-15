@@ -90,3 +90,57 @@ user_message = product_ctx + user_input
 **Workaround:** In Tier 3, we could add OCR of product images (Wave 8 vision tool) to extract ingredient panels from label photos
 
 ---
+
+## G-11: HDBSCAN returns all-noise labels when all embeddings are identical (test vectors)
+
+**Symptom:** `test_cluster_review_themes_returns_themes_list` passes but no clusters form — all labels are -1  
+**Root cause:** Test uses `[0.1] * 128` for all 10 reviews. HDBSCAN correctly classifies all identical points as noise (no density structure)  
+**Fix:** Added guard in `review_themes.py`: `if labels is None or all(l == -1 for l in labels): labels = [0] * len(reviews)` — forces a single cluster when all are noise  
+**Applies to:** `healf_agent/tools/review_themes.py`
+
+---
+
+## G-12: `google.generativeai` is NOT installed — use `google-genai` SDK
+
+**Symptom:** `import google.generativeai as genai` → `ModuleNotFoundError`  
+**Root cause:** `pyproject.toml` specifies `google-genai` (the new SDK), not the legacy `google-generativeai`  
+**Fix:** Use `from google import genai` and instantiate with `genai.Client(api_key=...)`. The `models.generate_content` call takes `contents=` as a list of `Part` objects for multimodal  
+**Applies to:** `healf_agent/tools/vision.py`, dispatcher in `tools/__init__.py`
+
+---
+
+## G-13: Gemini Vision requires multimodal Part objects — not URL strings in text
+
+**Symptom:** `score_images` passed URLs as plain text; Gemini returned hallucinated scores based on URL filenames  
+**Root cause:** `gemini_client.models.generate_content(contents="...text with URLs...")` triggers text-only generation. Gemini never fetches the URLs  
+**Fix:** Fetch image bytes with `httpx`, build `contents=[types.Part.from_text(prompt), types.Part.from_bytes(data=bytes, mime_type="image/jpeg"), ...]`  
+**Applies to:** `healf_agent/tools/vision.py`
+
+---
+
+## G-14: kNN fallback to `product_type="Unknown"` is wrong — use `product_type=None`
+
+**Symptom:** `benchmark_against_category` fell back to `knn(product_type="Unknown")` — correct for current corpus but wrong semantically. A future typed corpus would still filter to only "Unknown" entries  
+**Root cause:** Plan spec said "fall back to Unknown" but the correct intent is "fall back to unfiltered (all types)"  
+**Fix:** Extended `Storage.knn` to accept `product_type=None` (no WHERE clause); fallback in `benchmark.py` uses `knn(product_type=None, ...)`  
+**Applies to:** `healf_agent/storage.py`, `healf_agent/tools/benchmark.py`
+
+---
+
+## G-15: `evaluate_listing_quality` dispatcher had `themes=[]` hardwired
+
+**Symptom:** The 5-axis evaluator always received empty themes list, so the "review themes" grounding in the rubric prompt was permanently silenced ("No review themes available.")  
+**Root cause:** Initial dispatch implementation passed `themes=[]` instead of loading stored themes from `review_themes` table  
+**Fix:** Added `SELECT polarity, label, summary FROM review_themes WHERE product_gid=?` before calling `evaluate_listing_quality`  
+**Applies to:** `healf_agent/tools/__init__.py` — `evaluate_listing_quality` dispatch branch
+
+---
+
+## G-16: `enqueue_hitl` `cursor.lastrowid` can be None on failed INSERT
+
+**Symptom:** Function declared return type `int` but `sqlite3.Cursor.lastrowid` is `int | None`  
+**Root cause:** Raw SQL INSERT via `storage.conn.execute()` — `lastrowid` is `None` if INSERT didn't produce a row  
+**Fix:** Added guard: `row_id = cursor.lastrowid; if row_id is None: raise RuntimeError(...); return row_id`  
+**Applies to:** `healf_agent/tools/act.py` — `enqueue_hitl`
+
+---
