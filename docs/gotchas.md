@@ -172,3 +172,17 @@ Each page must be a callable (not a file path) when it needs to share module-lev
 **Applies to:** `app.py`, any future pages added to `pages/`
 
 ---
+
+## G-19: Multiple stale Streamlit processes accumulate on port 8501
+
+**Symptom:** After multiple sessions, `netstat -ano | findstr :8501` shows 8+ PIDs all listening. The HITL page throws `AttributeError: 'Storage' object has no attribute 'list_hitl'` even after the import reorder fix — because a stale process is serving requests with an old in-memory module that pre-dates `list_hitl`.  
+**Root cause:** Each `python -m uv run streamlit run app.py &` in a Bash tool session starts a new Streamlit process. The old ones are never cleaned up between sessions.  
+**Fix:** Before every smoke test, kill all listeners on 8501 and start fresh:
+```powershell
+Get-NetTCPConnection -LocalPort 8501 -State Listen | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+$worktree = "C:\Users\Daran\AI\Healf AI Agent\.claude\worktrees\feat-healf-agent"
+Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run","app.py","--server.headless","true","--server.port","8501" -WorkingDirectory $worktree -WindowStyle Hidden
+```
+**Applies to:** Any session that runs Streamlit smoke tests
+
+---

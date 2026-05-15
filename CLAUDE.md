@@ -144,8 +144,8 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 
 | Wave | Tasks | Status |
 |------|-------|--------|
-| 10 — HITL + voice | `pages/hitl.py`, `healf_agent/voice.py` | ✅ Complete — 42 tests; ⚠️ HITL page G-17 bug (smoke test blocked) |
-| 11 — Evals | `evals/golden.jsonl`, `evals/runner.py` | 🔲 Next |
+| 10 — HITL + voice | `pages/hitl.py`, `healf_agent/voice.py` | ✅ Complete — 42 tests; smoke test passed (Session 5); tagged `wave-10-complete` |
+| 11 — Evals | `evals/golden.jsonl`, `evals/runner.py` | 🔲 Next — author Plan 4 first |
 | 12 — MCP server | `mcp_server.py` | 🔲 Planned |
 | 13 — n8n webhook | `webhook.py`, `n8n/healf-catalog-audit.json` | 🔲 Planned |
 
@@ -169,10 +169,9 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 
 1. Resume in the worktree: `C:\Users\Daran\AI\Healf AI Agent\.claude\worktrees\feat-healf-agent`
 2. Verify tests: `python -m uv run pytest -v` (should be 42 passing)
-3. **Fix G-17 first:** In `app.py`, move `from pages.hitl import run as hitl_run` below all `healf_agent.*` imports. If that doesn't resolve the `AttributeError: 'Storage' object has no attribute 'list_hitl'`, add diagnostic print inside `pages/hitl.py`'s `run()` to identify which module object is in use. See `docs/gotchas.md` G-17 for full details.
-4. **Manual smoke test (Wave 10.5):** launch Streamlit, fetch LMNT, ask "draft a rewrite addressing missing ingredients and claims" → verify draft appears in HITL page → test approve/reject/edit → apply `wave-10-complete` git tag
-5. Use `superpowers:subagent-driven-development` to continue Tier 3 from **Wave 11** (golden-set evals)
-6. Author Plan 4 before Wave 11
+3. **Kill stale Streamlit processes (G-19):** run the PowerShell cleanup from `docs/gotchas.md` G-19 before any smoke testing
+4. **Author Plan 4** covering Waves 11–13 (evals, MCP server, n8n webhook) — see `docs/handoff/2026-05-16-session-5-handoff.md` for design notes
+5. Use `superpowers:subagent-driven-development` to execute Wave 11 (golden-set evals)
 
 ## Reference Product (LMNT — golden fixture)
 
