@@ -1,6 +1,6 @@
 """Tests for healf_agent.voice — pure prompt-template assertions, no API calls."""
 from healf_agent.voice import HEALF_VOICE, REWRITE_SYSTEM, build_rewrite_prompt
-from healf_agent.models import Product, Image
+from healf_agent.models import Product
 
 
 def _make_product(**overrides) -> Product:
@@ -38,12 +38,13 @@ def test_build_rewrite_prompt_includes_product_title_and_gaps() -> None:
     prompt = build_rewrite_prompt(p, "- Missing sodium amount")
     assert p.title in prompt
     assert "Missing sodium amount" in prompt
-    assert "150" in prompt
+    assert "150–250 words" in prompt
 
 
 def test_build_rewrite_prompt_truncates_long_description() -> None:
-    long_desc = "x" * 700
+    long_desc = "a" * 300 + "b" * 400 + "z" * 100  # 300 a + 400 b + 100 z = 800 total
     p = _make_product(description=long_desc)
     prompt = build_rewrite_prompt(p, "gap")
-    # The full 700-char string should NOT appear — truncated to 600
-    assert "x" * 601 not in prompt
+    assert "a" * 300 in prompt   # first 300 chars are in prompt
+    assert "b" * 300 in prompt   # chars 301-600 (first 300 b's) are in prompt
+    assert "z" not in prompt     # chars 701+ (the z's) are NOT in prompt

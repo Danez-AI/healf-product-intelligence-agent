@@ -122,3 +122,4 @@ def test_update_hitl_edit_overwrites_drafted_description(storage: Storage) -> No
     assert entry is not None
     assert entry.drafted_description == "Revised copy"
     assert entry.status == "edited"
+    assert entry.reviewed_at is not None
