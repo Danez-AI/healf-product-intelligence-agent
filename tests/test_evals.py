@@ -83,3 +83,26 @@ def test_summary_exit_code_is_zero_on_all_pass() -> None:
     results = [{"pass": True}, {"pass": True}]
     code = summarise(results, run_id="r1", verbose=False)
     assert code == 0
+
+
+def test_run_case_records_dispatch_error(tmp_path) -> None:
+    from evals.runner import run_case
+    from healf_agent.storage import Storage
+
+    storage = Storage(tmp_path / "evals.sqlite")
+    storage.init_schema()
+
+    def boom(*, name, arguments, product):
+        raise RuntimeError("tool unavailable")
+
+    case = {
+        "id": "err-001",
+        "tool": "x",
+        "fixture": None,
+        "input": {},
+        "judge": "exact",
+        "expect": {"path": "", "equals": None},
+    }
+    result = run_case(case, storage=storage, run_id="r-err", dispatch=boom)
+    assert result["pass"] is False
+    assert "dispatch error" in result["detail"]

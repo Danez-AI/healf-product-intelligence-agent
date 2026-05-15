@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import uuid
@@ -113,11 +114,12 @@ def judge_llm_rubric(output: Any, expect: dict, anthropic_client=None) -> tuple[
         max_tokens=8,
         messages=[{"role": "user", "content": prompt}],
     )
-    raw = resp.content[0].text.strip() if resp.content else "0"
-    try:
-        score = int(raw[0])
-    except (ValueError, IndexError):
+    text_block = next((b for b in resp.content if getattr(b, "type", None) == "text"), None)
+    raw = text_block.text.strip() if text_block else "0"
+    m = re.search(r"[1-5]", raw)
+    if not m:
         return False, f"llm_rubric: unparseable score {raw!r}"
+    score = int(m.group())
     ok = score >= min_score
     return ok, f"llm_rubric score={score} (min={min_score}) — {raw!r}"
 
@@ -150,19 +152,21 @@ def run_case(
     product = FIXTURES[fixture_name]() if fixture_name in FIXTURES else None
     try:
         output = dispatch(name=case["tool"], arguments=case["input"], product=product)
+        judge = JUDGES[case["judge"]]
+        if case["judge"] == "llm_rubric":
+            ok, detail = judge(output, case["expect"], anthropic_client=anthropic_client)
+        else:
+            ok, detail = judge(output, case["expect"])
+        result = {"id": case["id"], "pass": ok, "detail": detail, "output": output}
+        _persist(storage, run_id, case["id"], 1.0 if ok else 0.0, detail)
+        return result
     except Exception as e:  # noqa: BLE001
         result = {"id": case["id"], "pass": False, "detail": f"dispatch error: {e}", "output": None}
-        _persist(storage, run_id, case["id"], 0.0, result["detail"])
+        try:
+            _persist(storage, run_id, case["id"], 0.0, result["detail"])
+        except Exception:
+            pass
         return result
-
-    judge = JUDGES[case["judge"]]
-    if case["judge"] == "llm_rubric":
-        ok, detail = judge(output, case["expect"], anthropic_client=anthropic_client)
-    else:
-        ok, detail = judge(output, case["expect"])
-    result = {"id": case["id"], "pass": ok, "detail": detail, "output": output}
-    _persist(storage, run_id, case["id"], 1.0 if ok else 0.0, detail)
-    return result
 
 
 def _persist(storage: Storage, run_id: str, question_id: str, score: float, detail: str) -> None:
