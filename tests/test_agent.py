@@ -228,6 +228,9 @@ def test_draft_rewrite_returns_string(monkeypatch) -> None:
     )
     assert isinstance(result, str)
     assert len(result) > 0
+    # Verify the system prompt passed to the API contains "Healf" (brand voice)
+    call_kwargs = fake_anthropic.messages.create.call_args.kwargs
+    assert "Healf" in call_kwargs["system"]
 
 
 def test_enqueue_hitl_persists_to_storage(monkeypatch) -> None:
