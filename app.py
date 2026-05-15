@@ -8,13 +8,13 @@ import streamlit as st
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-from pages.hitl import run as hitl_run
-
 from healf_agent.agent import run_agent_turn
 from healf_agent.models import Product
 from healf_agent.storage import Storage
 from healf_agent.tools.ingest import extract_metafields, parse_product
 from healf_agent.tools.navigate import fetch_product_page
+
+from pages.hitl import run as hitl_run
 
 load_dotenv()
 
