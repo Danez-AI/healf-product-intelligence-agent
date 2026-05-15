@@ -106,13 +106,13 @@ tests/
 ├── test_voice.py        ✅ 4 tests (Wave 10 — new)
 └── test_agent.py        ✅ 13 tests (Tier 1: 5, Tier 2: 8)
 
-app.py                   ✅ Done — Streamlit chat shell (smoke tested)
+app.py                   ✅ Done — Streamlit chat shell; uses st.navigation() API (G-18)
 corpus.sqlite            ✅ Done — 150 products pre-built
 scripts/build_corpus.py  ✅ Done — CLI for corpus rebuild
 docs/gotchas.md          ✅ Running log of surprises and fixes
 mcp_server.py            🔲 Wave 12
 webhook.py               🔲 Wave 13
-pages/hitl.py            ✅ Done — Streamlit HITL review queue (Wave 10)
+pages/hitl.py            ✅ Done — Streamlit HITL review queue (Wave 10) ⚠️ G-17 runtime bug
 evals/golden.jsonl       🔲 Wave 11
 evals/runner.py          🔲 Wave 11
 n8n/healf-catalog-audit.json  🔲 Wave 13
@@ -144,7 +144,7 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 
 | Wave | Tasks | Status |
 |------|-------|--------|
-| 10 — HITL + voice | `pages/hitl.py`, `healf_agent/voice.py` | ✅ Complete — 42 tests passing |
+| 10 — HITL + voice | `pages/hitl.py`, `healf_agent/voice.py` | ✅ Complete — 42 tests; ⚠️ HITL page G-17 bug (smoke test blocked) |
 | 11 — Evals | `evals/golden.jsonl`, `evals/runner.py` | 🔲 Next |
 | 12 — MCP server | `mcp_server.py` | 🔲 Planned |
 | 13 — n8n webhook | `webhook.py`, `n8n/healf-catalog-audit.json` | 🔲 Planned |
@@ -169,9 +169,10 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 
 1. Resume in the worktree: `C:\Users\Daran\AI\Healf AI Agent\.claude\worktrees\feat-healf-agent`
 2. Verify tests: `python -m uv run pytest -v` (should be 42 passing)
-3. **Manual smoke test (Wave 10.5):** launch Streamlit, fetch LMNT, ask "draft a rewrite addressing missing ingredients and claims" → verify draft appears in HITL page sidebar nav
-4. Use `superpowers:subagent-driven-development` to continue Tier 3 from **Wave 11** (golden-set evals)
-5. Author Plan 4 before Wave 11
+3. **Fix G-17 first:** In `app.py`, move `from pages.hitl import run as hitl_run` below all `healf_agent.*` imports. If that doesn't resolve the `AttributeError: 'Storage' object has no attribute 'list_hitl'`, add diagnostic print inside `pages/hitl.py`'s `run()` to identify which module object is in use. See `docs/gotchas.md` G-17 for full details.
+4. **Manual smoke test (Wave 10.5):** launch Streamlit, fetch LMNT, ask "draft a rewrite addressing missing ingredients and claims" → verify draft appears in HITL page → test approve/reject/edit → apply `wave-10-complete` git tag
+5. Use `superpowers:subagent-driven-development` to continue Tier 3 from **Wave 11** (golden-set evals)
+6. Author Plan 4 before Wave 11
 
 ## Reference Product (LMNT — golden fixture)
 

@@ -144,3 +144,31 @@ user_message = product_ctx + user_input
 **Applies to:** `healf_agent/tools/act.py` — `enqueue_hitl`
 
 ---
+
+## G-17: `Storage.list_hitl` AttributeError in Streamlit page runtime
+
+**Symptom:** `pages/hitl.py` throws `AttributeError: 'Storage' object has no attribute 'list_hitl'` when loaded via `st.Page(hitl_run)`. Direct Python import confirms the method IS present.  
+**Root cause:** Unknown — likely Streamlit module isolation. The `pages.hitl` module is imported before `healf_agent.storage` in `app.py`, which may cause a stale module reference in the page's execution context.  
+**Status:** Unresolved as of 2026-05-16  
+**First fix to try:** Reorder `app.py` imports so all `healf_agent.*` imports come before `from pages.hitl import run as hitl_run`. This ensures `healf_agent.storage` is fully loaded before the page module references it.  
+**Diagnostic if reorder fails:** Add `print(id(healf_agent.storage), dir(Storage))` inside `run()` to confirm whether a different module object is being used.  
+**Applies to:** `app.py`, `pages/hitl.py`
+
+---
+
+## G-18: Streamlit 1.57 removed legacy `pages/` auto-discovery
+
+**Symptom:** Files placed in `pages/` directory are not auto-discovered as navigation pages. Chat page loads but sidebar shows no additional page links.  
+**Root cause:** Streamlit 1.57 deprecated and removed the legacy multi-page auto-discovery pattern (`pages/*.py` with `st.set_page_config` in each).  
+**Fix:** Use the `st.navigation()` API in the main `app.py` entry point:
+```python
+pg = st.navigation([
+    st.Page(chat_page, title="Chat", icon="💬", default=True),
+    st.Page(hitl_run, title="HITL Review", icon="📋"),
+])
+pg.run()
+```
+Each page must be a callable (not a file path) when it needs to share module-level imports with the host app. Only `app.py` calls `st.set_page_config()`.  
+**Applies to:** `app.py`, any future pages added to `pages/`
+
+---
