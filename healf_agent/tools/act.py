@@ -55,4 +55,7 @@ def enqueue_hitl(
         (product.handle, product.description, drafted_description, gap_summary, "pending", time.time()),
     )
     storage.conn.commit()
-    return cursor.lastrowid
+    row_id = cursor.lastrowid
+    if row_id is None:
+        raise RuntimeError("INSERT into hitl_queue returned no row id")
+    return row_id
