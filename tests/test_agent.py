@@ -154,14 +154,39 @@ def test_evaluate_listing_quality_returns_eval_report(monkeypatch) -> None:
 from healf_agent.tools.vision import score_images
 
 
-def test_score_images_returns_scores(monkeypatch) -> None:
+def test_score_images_returns_scores_no_images() -> None:
+    """Empty images list triggers early return."""
+    fake_gemini = MagicMock()
+    p = _p()  # images=[]
+    result = score_images(product=p, gemini_client=fake_gemini)
+    assert "image_scores" in result
+    assert result["image_scores"] == []
+    fake_gemini.models.generate_content.assert_not_called()
+
+
+def test_score_images_calls_gemini_with_image_parts(monkeypatch) -> None:
+    """With images, fetches bytes and calls Gemini multimodally."""
+    from healf_agent.models import Image
+
     fake_gemini = MagicMock()
     fake_gemini.models.generate_content.return_value = MagicMock(
         text='[{"url": "https://cdn.shopify.com/x.jpg", "clarity": 4, "lifestyle": false, "label_legible": true, "overall": 4, "notes": "Clean pack shot"}]'
     )
-    p = _p()
+
+    # Patch httpx so no real network call is made
+    import healf_agent.tools.vision as vision_module
+    monkeypatch.setattr(
+        vision_module,
+        "_fetch_image_bytes",
+        lambda url, timeout=10.0: b"fakeimagebytes",
+    )
+
+    p = _p(images=[Image(url="https://cdn.shopify.com/x.jpg", alt="test")])
     result = score_images(product=p, gemini_client=fake_gemini)
+
     assert "image_scores" in result
+    assert result["image_count"] == 1
+    fake_gemini.models.generate_content.assert_called_once()
 
 
 from healf_agent.tools.consistency import check_consistency
