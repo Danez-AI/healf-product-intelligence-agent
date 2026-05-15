@@ -34,3 +34,22 @@ def test_check_field_misses_ingredient_when_absent() -> None:
     p = _p()
     out = check_field(p, field="ingredient", value="vitamin d")
     assert out["present"] is False
+
+
+def test_tool_schemas_advertise_check_field() -> None:
+    from healf_agent.tools import TOOL_SCHEMAS
+
+    names = {t["name"] for t in TOOL_SCHEMAS}
+    assert "check_field" in names
+
+
+def test_dispatch_check_field_returns_dict(monkeypatch) -> None:
+    from healf_agent.tools import dispatch_tool
+
+    p = _p()  # reuses helper defined at top of this file
+    out = dispatch_tool(
+        name="check_field",
+        arguments={"field": "ingredient", "value": "sodium"},
+        product=p,
+    )
+    assert out["present"] is True
