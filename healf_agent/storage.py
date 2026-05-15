@@ -5,7 +5,7 @@ import json
 import math
 import sqlite3
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS hitl_queue (
     drafted_description TEXT NOT NULL,
     gap_summary TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
-    created_at REAL NOT NULL
+    created_at REAL NOT NULL,
+    reviewer_note TEXT,
+    reviewed_at REAL
 );
 CREATE TABLE IF NOT EXISTS eval_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,8 +95,9 @@ class Storage:
             try:
                 self.conn.execute(f"ALTER TABLE hitl_queue ADD COLUMN {col} {decl}")
                 self.conn.commit()
-            except Exception:
-                pass  # column already exists — idempotent
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
 
     # ---- products ----
     def upsert_product(self, p: Product) -> None:
@@ -179,9 +182,9 @@ class Storage:
             drafted_description=row["drafted_description"],
             gap_summary=row["gap_summary"],
             status=row["status"],
-            created_at=datetime.fromtimestamp(row["created_at"]) if row["created_at"] is not None else None,
-            reviewer_note=row["reviewer_note"] if row["reviewer_note"] is not None else None,
-            reviewed_at=datetime.fromtimestamp(row["reviewed_at"]) if row["reviewed_at"] is not None else None,
+            created_at=datetime.fromtimestamp(row["created_at"], tz=timezone.utc) if row["created_at"] is not None else None,
+            reviewer_note=row["reviewer_note"],
+            reviewed_at=datetime.fromtimestamp(row["reviewed_at"], tz=timezone.utc) if row["reviewed_at"] is not None else None,
         )
 
     def list_hitl(self, status: str | None = None) -> list[HITLEntry]:
@@ -221,8 +224,10 @@ class Storage:
             sets.append("reviewer_note = ?")
             params.append(reviewer_note)
         params.append(hitl_id)
-        self.conn.execute(
+        cursor = self.conn.execute(
             f"UPDATE hitl_queue SET {', '.join(sets)} WHERE id = ?",
             params,
         )
         self.conn.commit()
+        if cursor.rowcount == 0:
+            raise KeyError(f"No HITL entry with id={hitl_id}")
