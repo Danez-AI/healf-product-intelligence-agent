@@ -120,7 +120,7 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 
 ## Build Plan — Tier Status
 
-**Tier 1 (Foundation) — ✅ COMPLETE** — tagged `tier-1-complete` — 25 tests passing
+**Tier 1 (Foundation) — ✅ COMPLETE** — tagged `tier-1-complete`
 
 | Wave | Tasks | Status |
 |------|-------|--------|
@@ -131,7 +131,7 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 | 4 — Corpus | 4.1–4.3 | ✅ Complete |
 | 5 — Agent core | 5.1–5.5 | ✅ Complete |
 
-**Tier 2 (Analytical depth) — ✅ COMPLETE** — tagged `tier-2-complete` — 35 tests passing
+**Tier 2 (Analytical depth) — ✅ COMPLETE** — tagged `tier-2-complete`
 
 | Wave | Tasks | Status |
 |------|-------|--------|
@@ -140,14 +140,14 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 | 8 — Vision + consistency | `score_images`, `check_consistency` | ✅ Complete |
 | 9 — Compare + act | `compare_products`, `draft_rewrite`, `enqueue_hitl` | ✅ Complete |
 
-**Tier 3 (AI-as-colleague proof) — Wave 10–13 — In Progress**
+**Tier 3 (AI-as-colleague proof) — Wave 10–13 — ✅ COMPLETE** — tagged `wave-13-complete` — 56 tests passing
 
 | Wave | Tasks | Status |
 |------|-------|--------|
-| 10 — HITL + voice | `pages/hitl.py`, `healf_agent/voice.py` | ✅ Complete — 42 tests; smoke test passed (Session 5); tagged `wave-10-complete` |
-| 11 — Evals | `evals/golden.jsonl`, `evals/runner.py` | 🔲 Next — author Plan 4 first |
-| 12 — MCP server | `mcp_server.py` | 🔲 Planned |
-| 13 — n8n webhook | `webhook.py`, `n8n/healf-catalog-audit.json` | 🔲 Planned |
+| 10 — HITL + voice | `pages/hitl.py`, `healf_agent/voice.py` | ✅ Complete — tagged `wave-10-complete` |
+| 11 — Evals | `evals/golden.jsonl`, `evals/runner.py` | ✅ Complete — 8 new tests |
+| 12 — MCP server | `mcp_server.py` | ✅ Complete — 3 new tests |
+| 13 — n8n webhook | `webhook.py`, `n8n/healf-catalog-audit.json` | ✅ Complete — 3 new tests; tagged `wave-13-complete` |
 
 **Tier 4 (Polish) — Wave 14 — Planned**
 
@@ -168,10 +168,10 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 ## Workflow for Next Session
 
 1. Resume in the worktree: `C:\Users\Daran\AI\Healf AI Agent\.claude\worktrees\feat-healf-agent`
-2. Verify tests: `python -m uv run pytest -v` (should be 42 passing)
+2. Verify tests: `python -m uv run pytest -v` (should be 56 passing)
 3. **Kill stale Streamlit processes (G-19):** run the PowerShell cleanup from `docs/gotchas.md` G-19 before any smoke testing
-4. **Author Plan 4** covering Waves 11–13 (evals, MCP server, n8n webhook) — see `docs/handoff/2026-05-16-session-5-handoff.md` for design notes
-5. Use `superpowers:subagent-driven-development` to execute Wave 11 (golden-set evals)
+4. **Wave 14 (Polish) or submission prep** — see `docs/handoff/2026-05-16-session-5-handoff.md` for context
+5. Use context-mode skill when needed to ensure context preservation in between sessions
 
 ## Reference Product (LMNT — golden fixture)
 
