@@ -5,19 +5,7 @@ import time
 
 from healf_agent.models import Product
 from healf_agent.storage import Storage
-
-_REWRITE_PROMPT = """\
-You are a copywriter for Healf, a UK premium health & wellness marketplace.
-Healf voice: confident, evidence-led, warm but not preachy. British English. No hype.
-
-Rewrite the product description for:
-Product: {title} by {brand}
-Current description: {description}
-
-Gaps to address:
-{gaps}
-
-Write a new description (150-250 words). Return ONLY the description text."""
+from healf_agent.voice import REWRITE_SYSTEM, build_rewrite_prompt
 
 
 def draft_rewrite(
@@ -27,15 +15,12 @@ def draft_rewrite(
     anthropic_client,
     model: str = "claude-sonnet-4-6",
 ) -> str:
-    prompt = _REWRITE_PROMPT.format(
-        title=product.title,
-        brand=product.brand,
-        description=product.description[:600],
-        gaps="\n".join(f"- {g}" for g in gaps),
-    )
+    gap_summary = "\n".join(f"- {g}" for g in gaps)
+    prompt = build_rewrite_prompt(product, gap_summary)
     resp = anthropic_client.messages.create(
         model=model,
         max_tokens=512,
+        system=REWRITE_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
     return resp.content[0].text.strip() if resp.content else ""
