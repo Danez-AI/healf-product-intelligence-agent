@@ -46,6 +46,16 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "benchmark_against_category",
+        "description": "Find similar products in the Healf corpus and return comparative context.",
+        "input_schema": {"type": "object", "properties": {"k": {"type": "integer", "default": 5}}, "required": []},
+    },
+    {
+        "name": "evaluate_listing_quality",
+        "description": "Score the current product listing on 5 quality axes using Claude, grounded in corpus neighbours and review themes.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
 ]
 
 
@@ -99,4 +109,49 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
         result = [t.model_dump() for t in themes
                   if polarity_filter == "all" or t.polarity == polarity_filter]
         return {"themes": result, "total_reviews": len(reviews)}
+    if name == "benchmark_against_category":
+        from healf_agent.tools.benchmark import benchmark_against_category
+        from healf_agent.storage import Storage
+        from pathlib import Path
+        import os
+        from openai import OpenAI
+
+        if product is None:
+            raise ValueError("benchmark_against_category requires a current product")
+        storage = Storage(Path(os.environ.get("HEALF_DB", "healf.sqlite")))
+        storage.init_schema()
+        openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        k = int(arguments.get("k", 5))
+        return benchmark_against_category(
+            product=product,
+            storage=storage,
+            openai_client=openai_client,
+            k=k,
+        )
+    if name == "evaluate_listing_quality":
+        from healf_agent.tools.evaluate import evaluate_listing_quality
+        from healf_agent.tools.benchmark import benchmark_against_category
+        from healf_agent.storage import Storage
+        from pathlib import Path
+        import os
+        from openai import OpenAI
+        from anthropic import Anthropic
+
+        if product is None:
+            raise ValueError("evaluate_listing_quality requires a current product")
+        storage = Storage(Path(os.environ.get("HEALF_DB", "healf.sqlite")))
+        storage.init_schema()
+        openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        anthropic_client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        neighbours_result = benchmark_against_category(
+            product=product, storage=storage, openai_client=openai_client
+        )
+        neighbours = neighbours_result["neighbours"]
+        report = evaluate_listing_quality(
+            product=product,
+            neighbours=neighbours,
+            themes=[],
+            anthropic_client=anthropic_client,
+        )
+        return report.model_dump(mode="json")
     raise ValueError(f"unknown tool: {name}")

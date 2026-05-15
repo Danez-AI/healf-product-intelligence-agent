@@ -87,3 +87,65 @@ def test_agent_loop_dispatches_tool_then_finalises() -> None:
     )
     assert "sodium" in answer.lower()
     assert any(step["tool"] == "check_field" for step in trace)
+
+
+from healf_agent.tools.benchmark import benchmark_against_category
+
+
+def test_benchmark_returns_neighbours(monkeypatch) -> None:
+    from healf_agent.storage import Storage
+    import tempfile
+    from pathlib import Path
+
+    tmp = Path(tempfile.mkdtemp()) / "c.sqlite"
+    s = Storage(tmp)
+    s.init_schema()
+    for i in range(3):
+        s.upsert_corpus_entry(
+            handle=f"prod-{i}",
+            product_type="Unknown",
+            title=f"Product {i}",
+            text=f"Description of product {i}",
+            embedding=[0.1 + i * 0.01] * 8,
+        )
+
+    fake_openai = MagicMock()
+    fake_openai.embeddings.create.return_value = MagicMock(
+        data=[MagicMock(embedding=[0.1] * 8)]
+    )
+
+    result = benchmark_against_category(
+        product=_p(),
+        storage=s,
+        openai_client=fake_openai,
+        k=3,
+    )
+    assert "neighbours" in result
+    assert len(result["neighbours"]) <= 3
+
+
+from healf_agent.tools.evaluate import evaluate_listing_quality
+
+
+def test_evaluate_listing_quality_returns_eval_report(monkeypatch) -> None:
+    fake_anthropic = MagicMock()
+    fake_anthropic.messages.create.return_value = MagicMock(
+        content=[MagicMock(type="text", text='''{
+  "scores": [
+    {"axis": "completeness", "score": 3, "rationale": "Missing serving size"},
+    {"axis": "differentiation", "score": 4, "rationale": "Good brand story"}
+  ],
+  "gaps": ["Add serving size info", "Add ingredient amounts"]
+}''')]
+    )
+    p = _p()
+    report = evaluate_listing_quality(
+        product=p,
+        neighbours=[{"handle": "x", "title": "X", "excerpt": "Great product."}],
+        themes=[],
+        anthropic_client=fake_anthropic,
+    )
+    from healf_agent.models import EvalReport
+    assert isinstance(report, EvalReport)
+    assert report.average() > 0
+    assert len(report.gaps) >= 1
