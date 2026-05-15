@@ -114,6 +114,8 @@ class HITLEntry(BaseModel):
     gap_summary: str
     status: Literal["pending", "approved", "rejected", "edited"] = "pending"
     created_at: datetime | None = None
+    reviewer_note: str | None = None
+    reviewed_at: datetime | None = None
 
 
 class Comparison(BaseModel):

@@ -4,10 +4,12 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-from healf_agent.models import Image, Product, Review
+from healf_agent.models import HITLEntry, Image, Product, Review
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS products (
@@ -87,6 +89,12 @@ class Storage:
     def init_schema(self) -> None:
         self.conn.executescript(SCHEMA)
         self.conn.commit()
+        for col, decl in [("reviewer_note", "TEXT"), ("reviewed_at", "REAL")]:
+            try:
+                self.conn.execute(f"ALTER TABLE hitl_queue ADD COLUMN {col} {decl}")
+                self.conn.commit()
+            except Exception:
+                pass  # column already exists — idempotent
 
     # ---- products ----
     def upsert_product(self, p: Product) -> None:
@@ -161,3 +169,60 @@ class Storage:
         ]
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:k]
+
+    # ---- hitl_queue ----
+    def _row_to_hitl(self, row: sqlite3.Row) -> HITLEntry:
+        return HITLEntry(
+            id=row["id"],
+            product_handle=row["product_handle"],
+            original_description=row["original_description"],
+            drafted_description=row["drafted_description"],
+            gap_summary=row["gap_summary"],
+            status=row["status"],
+            created_at=datetime.fromtimestamp(row["created_at"]) if row["created_at"] is not None else None,
+            reviewer_note=row["reviewer_note"] if row["reviewer_note"] is not None else None,
+            reviewed_at=datetime.fromtimestamp(row["reviewed_at"]) if row["reviewed_at"] is not None else None,
+        )
+
+    def list_hitl(self, status: str | None = None) -> list[HITLEntry]:
+        if status is not None:
+            rows = self.conn.execute(
+                "SELECT * FROM hitl_queue WHERE status = ? ORDER BY created_at DESC",
+                (status,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM hitl_queue ORDER BY created_at DESC",
+            ).fetchall()
+        return [self._row_to_hitl(r) for r in rows]
+
+    def get_hitl(self, hitl_id: int) -> HITLEntry | None:
+        row = self.conn.execute(
+            "SELECT * FROM hitl_queue WHERE id = ?", (hitl_id,)
+        ).fetchone()
+        if not row:
+            return None
+        return self._row_to_hitl(row)
+
+    def update_hitl(
+        self,
+        hitl_id: int,
+        *,
+        status: str,
+        drafted_description: str | None = None,
+        reviewer_note: str | None = None,
+    ) -> None:
+        sets = ["status = ?", "reviewed_at = ?"]
+        params: list = [status, time.time()]
+        if drafted_description is not None:
+            sets.append("drafted_description = ?")
+            params.append(drafted_description)
+        if reviewer_note is not None:
+            sets.append("reviewer_note = ?")
+            params.append(reviewer_note)
+        params.append(hitl_id)
+        self.conn.execute(
+            f"UPDATE hitl_queue SET {', '.join(sets)} WHERE id = ?",
+            params,
+        )
+        self.conn.commit()
