@@ -76,22 +76,22 @@ healf_agent/
 ├── __init__.py          ✅ Done
 ├── models.py            ✅ Done — Product, Image, Review, ReviewTheme, EvalReport, etc.
 ├── storage.py           ✅ Done — SQLite CRUD for all 6 tables
-├── agent.py             🔲 Wave 5 — Anthropic tool-use loop
-├── corpus.py            🔲 Wave 4 — Sitemap → sample → embed → kNN
+├── agent.py             ✅ Done — Anthropic tool-use loop + SYSTEM_PROMPT
+├── corpus.py            ✅ Done — Sitemap → sample → embed → kNN
 ├── voice.py             🔲 Wave 10 — Healf-voice prompts
 └── tools/
-    ├── __init__.py      🔲 Wave 5 — TOOL_SCHEMAS + dispatcher (partial)
+    ├── __init__.py      ✅ Done — TOOL_SCHEMAS + dispatcher
     ├── navigate.py      ✅ Done — httpx fetch + Playwright fallback
     ├── ingest.py        ✅ Done — JSON-LD parse + RSC metafields
     ├── reviews.py       ✅ Done — Yotpo pagination
+    ├── field.py         ✅ Done — check_field exact lookups
     ├── review_themes.py 🔲 Wave 6
     ├── benchmark.py     🔲 Wave 7
     ├── vision.py        🔲 Wave 8
     ├── consistency.py   🔲 Wave 8
     ├── evaluate.py      🔲 Wave 7
     ├── act.py           🔲 Wave 9
-    ├── compare.py       🔲 Wave 9
-    └── field.py         🔲 Wave 5
+    └── compare.py       🔲 Wave 9
 
 tests/
 ├── fixtures/
@@ -100,38 +100,25 @@ tests/
 ├── test_storage.py      ✅ 4 tests
 ├── test_navigate.py     ✅ 3 tests
 ├── test_ingest.py       ✅ 3 tests
-└── test_reviews.py      ✅ 1 test
+├── test_reviews.py      ✅ 1 test
+├── test_corpus.py       ✅ 5 tests
+└── test_agent.py        ✅ 5 tests
 
-app.py                   🔲 Wave 5.4 — Streamlit chat shell
+app.py                   ✅ Done — Streamlit chat shell (smoke tested)
+corpus.sqlite            ✅ Done — 150 products pre-built
+scripts/build_corpus.py  ✅ Done — CLI for corpus rebuild
+docs/gotchas.md          ✅ Running log of surprises and fixes
 mcp_server.py            🔲 Wave 12
 webhook.py               🔲 Wave 13
 pages/hitl.py            🔲 Wave 10
-scripts/build_corpus.py  🔲 Wave 4.3
 evals/golden.jsonl       🔲 Wave 11
 evals/runner.py          🔲 Wave 11
 n8n/healf-catalog-audit.json  🔲 Wave 13
 ```
 
-## Git History (feat-healf-agent branch)
-
-```
-6dcbc9b feat(reviews): paginated Yotpo widget API fetcher
-ef33240 feat(ingest): metafield extraction from RSC flight payload
-1c70f15 feat(ingest): JSON-LD + RSC flight extraction, Product parsing from LMNT fixture
-88faaf8 feat(navigate): httpx fetch with Playwright fallback + URL normalisation
-eae59c8 test(fixtures): capture LMNT PDP HTML for ingestion tests
-fa97ec5 feat(storage): SQLite schema and CRUD for products, reviews, corpus, HITL
-ee3ff91 feat(models): Pydantic v2 schema for product, review, eval, consistency, HITL
-52a6125 build: package skeleton and README
-c907eae build: env template and gitignore
-5cc6321 build: initialise uv project with full dependency set
-e9a9f3c docs: import Tier 1 superpowers plan into repo
-34871b8 Initial commit: assignment brief and CV (planning workspace)
-```
-
 ## Build Plan — Tier Status
 
-**Tier 1 (Foundation) — IN PROGRESS**
+**Tier 1 (Foundation) — ✅ COMPLETE** — tagged `tier-1-complete` — 25 tests passing
 
 | Wave | Tasks | Status |
 |------|-------|--------|
@@ -139,10 +126,18 @@ e9a9f3c docs: import Tier 1 superpowers plan into repo
 | 1 — Models + Storage | 1.1–1.2 | ✅ Complete |
 | 2 — Ingestion | 2.1–2.4 | ✅ Complete |
 | 3 — Reviews | 3.1–3.2 | ✅ Complete |
-| 4 — Corpus | 4.1–4.3 | 🔲 Next |
-| 5 — Agent core | 5.1–5.5 | 🔲 Next |
+| 4 — Corpus | 4.1–4.3 | ✅ Complete |
+| 5 — Agent core | 5.1–5.5 | ✅ Complete |
 
-**Tier 2 (Analytical depth) — Wave 6–9 — Planned**
+**Tier 2 (Analytical depth) — IN PROGRESS**
+
+| Wave | Tasks | Status |
+|------|-------|--------|
+| 6 — Review-theme clustering | `cluster_review_themes` | 🔲 Next |
+| 7 — Benchmark + evaluate | `benchmark_against_category`, `evaluate_listing_quality` | 🔲 Planned |
+| 8 — Vision + consistency | `score_images`, `check_consistency` | 🔲 Planned |
+| 9 — Compare + act | `compare_products`, `draft_rewrite`, `enqueue_hitl` | 🔲 Planned |
+
 **Tier 3 (AI-as-colleague proof) — Wave 10–13 — Planned**
 **Tier 4 (Polish) — Wave 14 — Planned**
 
@@ -151,17 +146,21 @@ e9a9f3c docs: import Tier 1 superpowers plan into repo
 - **Stack:** Python 3.11+ + Anthropic SDK + Pydantic v2 + SQLite (not PostgreSQL — ship corpus.sqlite in repo)
 - **`uv` invocation:** `python -m uv` (not bare `uv`) on this machine
 - **No vanilla Shopify JSON endpoint:** Healf uses Next.js App Router; JSON-LD is the data source
-- **Yotpo key:** Not in static HTML; must come from `YOTPO_APP_KEY` env var
-- **Currency clamping:** `_KNOWN_CURRENCIES = {"GBP", "USD", "EUR"}` in ingest.py to prevent Pydantic ValidationError
+- **Yotpo key:** `bgzgoRGnLi5wOF0jyQdbzIfRCFKCpcmV701bZUJP` — set as `YOTPO_APP_KEY` in `.env`
+- **Yotpo CDN host:** DevTools shows `api-cdn.yotpo.com`; code uses `api.yotpo.com` — both work
+- **Currency clamping:** ingest.py clamps unknown currencies to `"GBP"` to satisfy Pydantic Literal
 - **Test fixture:** `lmnt-recharge-electrolytes-variety-pack.html` force-committed despite .gitignore
+- **corpus.sqlite product_type:** All 150 entries are "Unknown" — Healf JSON-LD has no `category` field. Fix needed in Wave 7 before kNN type-filtering is meaningful.
+- **Product context injection:** `app.py` prepends product title/brand/URL/ingredients/claims to every user message so the agent knows what's loaded
 - **Execution mode:** superpowers:subagent-driven-development — one subagent per task, spec + quality review after each
+- **Gotchas log:** `docs/gotchas.md` — running log of surprises and fixes
 
 ## Workflow for Next Session
 
 1. Resume in the worktree: `C:\Users\Daran\AI\Healf AI Agent\.claude\worktrees\feat-healf-agent`
-2. Verify tests: `python -m uv run pytest -v` (should be 15 passing)
-3. Use `superpowers:subagent-driven-development` to continue from **Task 4.1**
-4. See handoff document: `docs/handoff/2026-05-15-session-1-handoff.md`
+2. Verify tests: `python -m uv run pytest -v` (should be 25 passing)
+3. Use `superpowers:subagent-driven-development` to continue Tier 2 from **Wave 6**
+4. Plan 2 document needed before Wave 6 — author it first
 
 ## Reference Product (LMNT — golden fixture)
 
