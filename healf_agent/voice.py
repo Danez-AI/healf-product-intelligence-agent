@@ -20,7 +20,7 @@ def build_rewrite_prompt(product: Product, gap_summary: str) -> str:
     return (
         f"Rewrite the product description for '{product.title}' by "
         f"{product.brand}.\n\n"
-        f"Current description: {product.description}\n\n"
+        f"Current description: {product.description[:600]}\n\n"
         f"Identified gaps to address:\n{gap_summary}\n\n"
         "Requirements: 150–250 words. Address each gap concretely. "
         "Do not invent ingredients or claims not in the source. "
