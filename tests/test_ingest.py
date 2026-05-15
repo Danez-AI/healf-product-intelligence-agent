@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from healf_agent.tools.ingest import extract_json_ld, parse_product
+from healf_agent.tools.ingest import extract_json_ld, extract_metafields, parse_product
 
 
 FIXTURE = Path("tests/fixtures/lmnt-recharge-electrolytes-variety-pack.html")
@@ -29,3 +29,11 @@ def test_parse_product_lmnt_fixture() -> None:
     assert p.rating_value and p.rating_value > 4.5
     assert p.rating_count and p.rating_count >= 100
     assert len(p.images) >= 1
+
+
+def test_extract_metafields_pulls_ingredients_when_present() -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    meta = extract_metafields(html)
+    # We don't assert exact shape (LMNT may or may not have ingredient metafield),
+    # but the function must return a dict and not raise.
+    assert isinstance(meta, dict)
