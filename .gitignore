@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.env
+*.sqlite-journal
+healf.sqlite
+tests/fixtures/*.html
+!tests/fixtures/.gitkeep
+.streamlit/secrets.toml
+evals/results/*.jsonl
+!evals/results/.gitkeep
