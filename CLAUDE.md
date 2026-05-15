@@ -85,13 +85,13 @@ healf_agent/
     ├── ingest.py        ✅ Done — JSON-LD parse + RSC metafields
     ├── reviews.py       ✅ Done — Yotpo pagination
     ├── field.py         ✅ Done — check_field exact lookups
-    ├── review_themes.py 🔲 Wave 6
-    ├── benchmark.py     🔲 Wave 7
-    ├── vision.py        🔲 Wave 8
-    ├── consistency.py   🔲 Wave 8
-    ├── evaluate.py      🔲 Wave 7
-    ├── act.py           🔲 Wave 9
-    └── compare.py       🔲 Wave 9
+    ├── review_themes.py ✅ Done — cluster_review_themes (Wave 6)
+    ├── benchmark.py     ✅ Done — benchmark_against_category (Wave 7)
+    ├── vision.py        ✅ Done — score_images/Gemini Vision (Wave 8)
+    ├── consistency.py   ✅ Done — check_consistency (Wave 8)
+    ├── evaluate.py      ✅ Done — evaluate_listing_quality (Wave 7)
+    ├── act.py           ✅ Done — draft_rewrite + enqueue_hitl (Wave 9)
+    └── compare.py       ✅ Done — compare_products (Wave 9)
 
 tests/
 ├── fixtures/
@@ -102,7 +102,8 @@ tests/
 ├── test_ingest.py       ✅ 3 tests
 ├── test_reviews.py      ✅ 1 test
 ├── test_corpus.py       ✅ 5 tests
-└── test_agent.py        ✅ 5 tests
+├── test_review_themes.py ✅ 2 tests
+└── test_agent.py        ✅ 13 tests (Tier 1: 5, Tier 2: 8)
 
 app.py                   ✅ Done — Streamlit chat shell (smoke tested)
 corpus.sqlite            ✅ Done — 150 products pre-built
@@ -129,16 +130,16 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 | 4 — Corpus | 4.1–4.3 | ✅ Complete |
 | 5 — Agent core | 5.1–5.5 | ✅ Complete |
 
-**Tier 2 (Analytical depth) — IN PROGRESS**
+**Tier 2 (Analytical depth) — ✅ COMPLETE** — tagged `tier-2-complete` — 35 tests passing
 
 | Wave | Tasks | Status |
 |------|-------|--------|
-| 6 — Review-theme clustering | `cluster_review_themes` | 🔲 Next |
-| 7 — Benchmark + evaluate | `benchmark_against_category`, `evaluate_listing_quality` | 🔲 Planned |
-| 8 — Vision + consistency | `score_images`, `check_consistency` | 🔲 Planned |
-| 9 — Compare + act | `compare_products`, `draft_rewrite`, `enqueue_hitl` | 🔲 Planned |
+| 6 — Review-theme clustering | `cluster_review_themes` | ✅ Complete |
+| 7 — Benchmark + evaluate | `benchmark_against_category`, `evaluate_listing_quality` | ✅ Complete |
+| 8 — Vision + consistency | `score_images`, `check_consistency` | ✅ Complete |
+| 9 — Compare + act | `compare_products`, `draft_rewrite`, `enqueue_hitl` | ✅ Complete |
 
-**Tier 3 (AI-as-colleague proof) — Wave 10–13 — Planned**
+**Tier 3 (AI-as-colleague proof) — Wave 10–13 — Next**
 **Tier 4 (Polish) — Wave 14 — Planned**
 
 ## Key Decisions
@@ -158,9 +159,10 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 ## Workflow for Next Session
 
 1. Resume in the worktree: `C:\Users\Daran\AI\Healf AI Agent\.claude\worktrees\feat-healf-agent`
-2. Verify tests: `python -m uv run pytest -v` (should be 25 passing)
-3. Use `superpowers:subagent-driven-development` to continue Tier 2 from **Wave 6**
-4. Plan 2 document needed before Wave 6 — author it first
+2. Verify tests: `python -m uv run pytest -v` (should be 35 passing)
+3. **Manual smoke test first:** launch Streamlit, fetch LMNT, ask "what should I improve?" — verify tool trace includes benchmark → evaluate → draft_rewrite
+4. Use `superpowers:subagent-driven-development` to continue Tier 3 from **Wave 10** (HITL page)
+5. Author Plan 3 before Wave 10
 
 ## Reference Product (LMNT — golden fixture)
 
