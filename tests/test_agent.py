@@ -80,7 +80,7 @@ def test_agent_loop_dispatches_tool_then_finalises() -> None:
     ]
 
     p = _p()
-    answer, trace = run_agent_turn(
+    answer, trace, debug = run_agent_turn(
         client=fake_client,
         model="claude-sonnet-4-6",
         system="be useful",
@@ -251,3 +251,46 @@ def test_enqueue_hitl_persists_to_storage(monkeypatch) -> None:
     assert isinstance(entry_id, int)
     row = s.conn.execute("SELECT * FROM hitl_queue WHERE id=?", (entry_id,)).fetchone()
     assert row is not None
+
+
+def test_run_agent_turn_returns_debug_with_usage() -> None:
+    """run_agent_turn returns a 3-tuple; debug contains usage and system prompt."""
+    from unittest.mock import MagicMock
+
+    fake_client = MagicMock()
+    text_block = MagicMock()
+    text_block.type = "text"
+    text_block.text = "Done."
+    usage_mock = MagicMock()
+    usage_mock.input_tokens = 100
+    usage_mock.output_tokens = 50
+    usage_mock.cache_read_input_tokens = 0
+    usage_mock.cache_creation_input_tokens = 0
+    fake_resp = MagicMock(
+        stop_reason="end_turn",
+        content=[text_block],
+        usage=usage_mock,
+        model="claude-sonnet-4-6",
+    )
+    fake_client.messages.create.return_value = fake_resp
+
+    answer, trace, debug = run_agent_turn(
+        client=fake_client,
+        model="claude-sonnet-4-6",
+        system="test system",
+        user_message="hello",
+        product=None,
+        injected_product_context="Some context",
+    )
+
+    assert answer == "Done."
+    assert isinstance(debug, dict)
+    assert debug["system"] == "test system"
+    assert debug["injected_context"] == "Some context"
+    assert len(debug["iterations"]) == 1
+    it = debug["iterations"][0]
+    assert it["usage"]["input_tokens"] == 100
+    assert it["usage"]["output_tokens"] == 50
+    assert it["stop_reason"] == "end_turn"
+    assert "latency_ms" in it
+    assert it["latency_ms"] >= 0

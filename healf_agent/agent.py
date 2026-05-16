@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import time
+from datetime import datetime, timezone
 from typing import Any
 
 from healf_agent.models import Product
@@ -32,11 +34,14 @@ def run_agent_turn(
     product: Product | None,
     system: str = SYSTEM_PROMPT,
     max_iters: int = 8,
-) -> tuple[str, list[dict[str, Any]]]:
-    """Run a single agent turn (tool-use loop) and return (final_text, tool_trace)."""
+    injected_product_context: str = "",
+) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    """Run a single agent turn (tool-use loop) and return (final_text, tool_trace, debug)."""
     trace: list[dict[str, Any]] = []
+    debug_iterations: list[dict[str, Any]] = []
     messages: list[dict[str, Any]] = [{"role": "user", "content": user_message}]
     for _ in range(max_iters):
+        t0 = time.perf_counter()
         resp = client.messages.create(
             model=model,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
@@ -44,6 +49,28 @@ def run_agent_turn(
             messages=messages,
             max_tokens=2048,
         )
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+        iter_record = {
+            "iter": len(debug_iterations),
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "messages_snapshot": json.loads(json.dumps(messages, default=str)),
+            "response_content": [
+                {"type": getattr(b, "type", "unknown"), "text": getattr(b, "text", None),
+                 "name": getattr(b, "name", None), "input": getattr(b, "input", None)}
+                for b in resp.content
+            ],
+            "usage": {
+                "input_tokens": getattr(getattr(resp, "usage", None), "input_tokens", 0),
+                "output_tokens": getattr(getattr(resp, "usage", None), "output_tokens", 0),
+                "cache_read_input_tokens": getattr(getattr(resp, "usage", None), "cache_read_input_tokens", 0),
+                "cache_creation_input_tokens": getattr(getattr(resp, "usage", None), "cache_creation_input_tokens", 0),
+            },
+            "stop_reason": resp.stop_reason,
+            "model": getattr(resp, "model", model),
+            "latency_ms": latency_ms,
+            "request_id": getattr(resp, "_request_id", None),
+        }
+        debug_iterations.append(iter_record)
         if resp.stop_reason == "tool_use":
             tool_results: list[dict[str, Any]] = []
             for block in resp.content:
@@ -71,5 +98,15 @@ def run_agent_turn(
         for block in resp.content:
             if getattr(block, "type", None) == "text":
                 text += block.text
-        return text, trace
-    return "Iteration cap reached without final answer.", trace
+        debug: dict[str, Any] = {
+            "system": system,
+            "injected_context": injected_product_context,
+            "iterations": debug_iterations,
+        }
+        return text, trace, debug
+    debug = {
+        "system": system,
+        "injected_context": injected_product_context,
+        "iterations": debug_iterations,
+    }
+    return "Iteration cap reached without final answer.", trace, debug

@@ -56,6 +56,34 @@ def chat_page() -> None:
             if msg.get("trace"):
                 with st.expander("tool trace"):
                     st.json(msg["trace"])
+            if msg.get("debug"):
+                with st.expander("debug — prompts & messages", expanded=False):
+                    st.markdown("**System prompt:**")
+                    st.code(msg["debug"]["system"], language="text")
+                    if msg["debug"].get("injected_context"):
+                        st.markdown("**Injected product context:**")
+                        st.code(msg["debug"]["injected_context"], language="text")
+                    for i, it in enumerate(msg["debug"]["iterations"]):
+                        st.markdown(f"**Iteration {i} — messages sent:**")
+                        st.json(it["messages_snapshot"])
+                        st.markdown(f"**Iteration {i} — response:**")
+                        st.json(it["response_content"])
+                with st.expander("debug — usage & timing", expanded=False):
+                    rows = [
+                        {
+                            "iter": it["iter"],
+                            "latency_ms": it["latency_ms"],
+                            "input_tokens": it["usage"]["input_tokens"],
+                            "output_tokens": it["usage"]["output_tokens"],
+                            "cache_read": it["usage"]["cache_read_input_tokens"],
+                            "stop_reason": it["stop_reason"],
+                            "model": it["model"],
+                        }
+                        for it in msg["debug"]["iterations"]
+                    ]
+                    if rows:
+                        import pandas as pd
+                        st.dataframe(pd.DataFrame(rows))
 
     user_input = st.chat_input("Ask the agent...")
     if user_input:
@@ -82,17 +110,47 @@ def chat_page() -> None:
                     user_message = product_ctx + user_input
                 else:
                     user_message = user_input
-                answer, trace = run_agent_turn(
+                answer, trace, debug = run_agent_turn(
                     client=client,
                     model="claude-sonnet-4-6",
                     user_message=user_message,
                     product=product,
+                    injected_product_context=product_ctx if product else "",
                 )
                 st.markdown(answer)
                 if trace:
                     with st.expander("tool trace"):
                         st.json(trace)
-        st.session_state["messages"].append({"role": "assistant", "text": answer, "trace": trace})
+                with st.expander("debug — prompts & messages", expanded=False):
+                    st.markdown("**System prompt:**")
+                    st.code(debug["system"], language="text")
+                    if debug["injected_context"]:
+                        st.markdown("**Injected product context:**")
+                        st.code(debug["injected_context"], language="text")
+                    for i, it in enumerate(debug["iterations"]):
+                        st.markdown(f"**Iteration {i} — messages sent to LLM:**")
+                        st.json(it["messages_snapshot"])
+                        st.markdown(f"**Iteration {i} — LLM response:**")
+                        st.json(it["response_content"])
+                with st.expander("debug — usage & timing", expanded=False):
+                    rows = [
+                        {
+                            "iter": it["iter"],
+                            "latency_ms": it["latency_ms"],
+                            "input_tokens": it["usage"]["input_tokens"],
+                            "output_tokens": it["usage"]["output_tokens"],
+                            "cache_read": it["usage"]["cache_read_input_tokens"],
+                            "stop_reason": it["stop_reason"],
+                            "model": it["model"],
+                        }
+                        for it in debug["iterations"]
+                    ]
+                    if rows:
+                        import pandas as pd
+                        st.dataframe(pd.DataFrame(rows))
+        st.session_state["messages"].append(
+            {"role": "assistant", "text": answer, "trace": trace, "debug": debug}
+        )
 
 
 pg = st.navigation(
