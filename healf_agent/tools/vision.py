@@ -16,7 +16,12 @@ Score these {n} product images for a health ecommerce listing.
 For each image (in the order provided), return a JSON array of objects with:
   "url", "clarity" (1-5), "lifestyle" (bool — is it a lifestyle/in-use shot?),
   "label_legible" (bool — can ingredient/nutrition label be read?),
-  "overall" (1-5), "notes" (1 sentence)
+  "overall" (1-5), "notes" (1 sentence),
+  "on_pack_text" (string — verbatim transcription of any legible text printed on the packaging,
+    including ingredient panels, serving size, electrolyte mg quantities, certifications,
+    and brand claims; empty string if no legible text is visible),
+  "contains_nutrition_panel" (bool — true if a structured nutrition or supplement-facts panel
+    is visible in this image)
 
 Return ONLY valid JSON array."""
 
@@ -84,6 +89,9 @@ def score_images(
         if "url" not in score and i < len(fetched_urls):
             score["url"] = fetched_urls[i]
 
+    aggregated_on_pack_text = "\n".join(
+        s.get("on_pack_text", "") for s in scores if s.get("on_pack_text")
+    )
     return {
         "image_scores": scores,
         "image_count": len(image_parts),
@@ -91,4 +99,6 @@ def score_images(
         "avg_clarity": (
             sum(s.get("clarity", 0) for s in scores) / len(scores) if scores else 0
         ),
+        "aggregated_on_pack_text": aggregated_on_pack_text,
+        "any_nutrition_panel": any(s.get("contains_nutrition_panel") for s in scores),
     }
