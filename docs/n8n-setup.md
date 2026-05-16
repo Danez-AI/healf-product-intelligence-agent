@@ -17,6 +17,10 @@ HP Home Server (192.168.0.87)          Windows PC (your LAN IP)
 └─────────────────────────┘            └──────────────────────────────┘
 ```
 
+**Workflow nodes:** Schedule → Config → URL List → Split In Batches → POST /audit → IF score < 3 → Notify Slack
+
+The **Config** node holds your two URLs in one place — no environment variables needed.
+
 ---
 
 ## Step 1 — Find your Windows PC's local IP
@@ -27,7 +31,7 @@ Run this in PowerShell on your Windows machine:
 ipconfig | Select-String "IPv4"
 ```
 
-Look for the address under your Wi-Fi or Ethernet adapter (e.g. `192.168.0.42`). This is your `WINDOWS_IP`. The HP server will call this address.
+Look for the address under your Wi-Fi or Ethernet adapter (e.g. `192.168.0.42`). The HP home server will call this address to reach the webhook.
 
 ---
 
@@ -51,7 +55,7 @@ Invoke-RestMethod -Uri http://localhost:8000/health
 # Expected: {"status":"ok"}
 ```
 
-**If Windows Firewall blocks the server** (n8n on the home server can't reach it):
+**If Windows Firewall blocks the connection** (n8n on the home server can't reach port 8000):
 ```powershell
 # Run once in an elevated PowerShell
 New-NetFirewallRule -DisplayName "Healf Webhook" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
@@ -66,89 +70,56 @@ If you want Slack alerts when a listing scores below 3/5:
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
 2. Pick a name (e.g. "Healf Audit Bot") and your workspace
 3. **Incoming Webhooks** → toggle **On** → **Add New Webhook to Workspace**
-4. Pick the channel (e.g. `#healf-alerts`) → **Allow**
+4. Pick a channel (e.g. `#healf-alerts`) → **Allow**
 5. Copy the webhook URL — looks like: `https://hooks.slack.com/services/T.../B.../...`
 
-If you don't have Slack or want to skip alerts for now, set `SLACK_WEBHOOK_URL` to any placeholder — the workflow has error handling so a failed Slack call won't stop the audit.
+If you want to skip Slack for now, leave the placeholder in the Config node — the workflow has error handling so a failed Slack call won't stop the audit.
 
 ---
 
-## Step 4 — Restart n8n with the two new environment variables
-
-SSH into the home server:
-
-```bash
-ssh daran@192.168.0.87
-```
-
-Stop the existing n8n container and restart it with two extra env vars. Replace `<WINDOWS_IP>` and `<SLACK_URL>` with your values:
-
-```bash
-docker stop n8n && docker rm n8n
-
-docker run -d \
-  --name n8n \
-  --restart unless-stopped \
-  -e N8N_SECURE_COOKIE=false \
-  -e WEBHOOK_URL=https://godfather.daran.in \
-  -e N8N_RESTRICT_FILE_ACCESS_TO=/home/node/invoices \
-  -e N8N_RUNNERS_DISABLED=true \
-  -e HEALF_WEBHOOK_URL=http://<WINDOWS_IP>:8000 \
-  -e SLACK_WEBHOOK_URL=<SLACK_URL> \
-  -p 5678:5678 \
-  -v n8n_data:/home/node/.n8n \
-  -v /home/daran/softlife/data/invoices:/home/node/invoices \
-  docker.n8n.io/n8nio/n8n
-```
-
-**Example** with `192.168.0.42` and a Slack URL:
-```bash
-  -e HEALF_WEBHOOK_URL=http://192.168.0.42:8000 \
-  -e SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../... \
-```
-
-Verify n8n is back up: open `http://192.168.0.87:5678` in a browser.
-
----
-
-## Step 5 — Import the workflow into n8n
+## Step 4 — Import the workflow into n8n
 
 1. Open n8n: `http://192.168.0.87:5678`
-2. Click **+** (New Workflow) in the top-left, then the **⋮** menu → **Import from File**
-3. Select: `n8n/healf-catalog-audit.json` from this repo
-4. The workflow loads — 6 nodes visible: Schedule → URL List → Split In Batches → POST /audit → IF score < 3 → Notify Slack
+2. Click **+** (New Workflow) in the top-left
+3. Click the **⋮** menu (top-right) → **Import from File**
+4. Select `n8n/healf-catalog-audit.json` from this repo
+5. The workflow loads — 7 nodes visible
 
 ---
 
-## Step 6 — Verify env vars are visible inside n8n
+## Step 5 — Fill in the Config node
 
-In the n8n workflow editor, click the **POST /audit** node. The URL field shows:
-```
-={{ $env.HEALF_WEBHOOK_URL }}/audit
-```
+This is the only configuration step. Everything else is already wired.
 
-To confirm n8n can see the env var: open the n8n **Settings** → **Environment** tab, or add a temporary Code node with:
-```javascript
-return [{ json: { url: $env.HEALF_WEBHOOK_URL } }];
-```
-Execute it — if it returns your Windows IP, the env var is wired correctly.
+1. Click the **Config** node (second from left, after Schedule)
+2. You'll see two fields:
+
+| Field | Placeholder | Replace with |
+|-------|-------------|--------------|
+| `webhookUrl` | `http://YOUR_WINDOWS_IP:8000` | Your Windows PC's LAN IP, e.g. `http://192.168.0.42:8000` |
+| `slackUrl` | `https://hooks.slack.com/services/REPLACE_ME` | Your Slack incoming webhook URL from Step 3 |
+
+3. Click **Save** (or click outside the node panel)
+
+That's it — no environment variables, no Docker restart needed.
 
 ---
 
-## Step 7 — Run a manual test
+## Step 6 — Run a manual test
 
 Click **Execute Workflow** (▶ button, top-right of the editor). This bypasses the schedule and runs immediately.
 
-**What you should see:**
+**What you should see step by step:**
 
 | Node | Expected output |
 |------|----------------|
-| Schedule | Skipped (manual run) |
-| URL List | 1 item: `{url: "https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack"}` |
+| Schedule | Skipped (manual trigger) |
+| Config | 1 item: `{webhookUrl: "http://...", slackUrl: "https://..."}` |
+| URL List | 1 item: `{url: "https://healf.com/en-uk/products/lmnt-..."}` |
 | Split In Batches | Passes item through (batch 1 of 1) |
 | POST /audit | JSON response: `{product_handle, score, gaps, hitl_id, draft}` |
-| IF score < 3 | Routes to **true** branch if score < 3, **false** branch otherwise |
-| Notify Slack | Fires if score < 3; otherwise skipped |
+| IF score < 3 | Routes **true** if score < 3, **false** otherwise |
+| Notify Slack | Fires if score < 3; skipped otherwise |
 
 **Typical audit response from the webhook:**
 ```json
@@ -165,9 +136,9 @@ A `score` of `2.4` is below the `3.0` threshold → Notify Slack fires.
 
 ---
 
-## Step 8 — Add more URLs to the audit list
+## Step 7 — Add more product URLs
 
-Open the **URL List** Code node. Edit the array:
+Open the **URL List** Code node and edit the array:
 
 ```javascript
 const urls = [
@@ -178,11 +149,11 @@ const urls = [
 return urls.map(url => ({ json: { url } }));
 ```
 
-Each URL becomes one item — the workflow processes them one at a time (batch size 1) so the webhook server isn't overwhelmed.
+Each URL is processed one at a time (batch size 1) so the webhook server isn't overwhelmed.
 
 ---
 
-## Step 9 — Activate for the daily schedule
+## Step 8 — Activate for the daily schedule
 
 Once the manual test passes:
 
@@ -194,7 +165,7 @@ Once the manual test passes:
 
 ## Score scale
 
-The `score` in the audit response is the average across evaluation dimensions, on a **0–5 scale**:
+The `score` in the audit response is averaged across evaluation dimensions, on a **0–5 scale**:
 
 | Score | Meaning |
 |-------|---------|
@@ -207,18 +178,18 @@ The `score` in the audit response is the average across evaluation dimensions, o
 ## Troubleshooting
 
 **POST /audit node fails with "connection refused"**
-- Check webhook server is still running on Windows (`uvicorn` process alive)
+- Check the webhook server is still running on Windows (`uvicorn` process alive in the terminal)
 - Check Windows Firewall isn't blocking port 8000 (Step 2)
-- Confirm `HEALF_WEBHOOK_URL` matches the Windows PC's actual LAN IP (run `ipconfig` again)
+- Confirm the `webhookUrl` in the Config node matches your Windows PC's actual LAN IP — run `ipconfig` again if unsure
 
 **POST /audit returns 400 "URL must be on healf.com"**
-- The URL in the Code node must start with `https://healf.com/` — check for typos
+- The URL in the URL List Code node must start with `https://healf.com/` — check for typos
 
 **POST /audit times out (> 120s)**
-- The webhook runs fetch + eval + rewrite in sequence — this can take 30–90s on first run (cold Playwright + API calls). The 120s timeout should be enough; if not, increase `timeout` in the POST /audit node options.
+- The webhook runs fetch + eval + rewrite in sequence — 30–90s on first run is normal (cold Playwright + API calls). If it consistently times out, increase `timeout` in the POST /audit node → Options
 
 **Slack node fails**
-- Workflow continues anyway (`onError: continueRegularOutput`) — check `SLACK_WEBHOOK_URL` is set correctly and the Slack app is still active
+- Workflow continues anyway (`onError: continueRegularOutput`) — verify the `slackUrl` in the Config node is the full `https://hooks.slack.com/services/...` URL and the Slack app is still active
 
-**n8n can't see the `$env.HEALF_WEBHOOK_URL` variable**
-- The container was not restarted with the new env var — repeat Step 4
+**Config node values not reaching POST /audit**
+- The expression `={{ $('Config').first().json.webhookUrl }}` references the Config node by name — if you renamed the node, update the expression in POST /audit and Notify Slack to match

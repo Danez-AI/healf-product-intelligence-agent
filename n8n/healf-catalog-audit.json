@@ -20,6 +20,32 @@
     },
     {
       "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1b2c3d4-0001-0000-0000-000000000001",
+              "name": "webhookUrl",
+              "type": "string",
+              "value": "http://YOUR_WINDOWS_IP:8000"
+            },
+            {
+              "id": "a1b2c3d4-0001-0000-0000-000000000002",
+              "name": "slackUrl",
+              "type": "string",
+              "value": "https://hooks.slack.com/services/REPLACE_ME"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "// Edit this list to add or remove product URLs to audit.\n// Each URL becomes one item processed one at a time.\nconst urls = [\n  'https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack'\n];\nreturn urls.map(url => ({ json: { url } }));"
       },
@@ -27,7 +53,7 @@
       "name": "URL List",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [680, 300]
     },
     {
       "parameters": {
@@ -38,12 +64,12 @@
       "name": "Split In Batches",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [680, 300]
+      "position": [900, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.HEALF_WEBHOOK_URL }}/audit",
+        "url": "={{ $('Config').first().json.webhookUrl }}/audit",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"url\": \"{{ $json.url }}\",\n  \"draft\": true\n}",
@@ -56,7 +82,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "onError": "continueRegularOutput",
-      "position": [900, 300]
+      "position": [1120, 300]
     },
     {
       "parameters": {
@@ -79,12 +105,12 @@
       "name": "IF score < 3",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [1120, 300]
+      "position": [1340, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "url": "={{ $('Config').first().json.slackUrl }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"text\": \":warning: Healf listing needs attention — *{{ $json.product_handle }}* scored {{ $json.score }}/5. Gaps: {{ $json.gaps.join(', ') }}. HITL queue id: {{ $json.hitl_id }}.\"\n}",
@@ -95,11 +121,16 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "onError": "continueRegularOutput",
-      "position": [1340, 200]
+      "position": [1560, 200]
     }
   ],
   "connections": {
     "Schedule: Daily 09:00 UTC": {
+      "main": [
+        [{"node": "Config", "type": "main", "index": 0}]
+      ]
+    },
+    "Config": {
       "main": [
         [{"node": "URL List", "type": "main", "index": 0}]
       ]
@@ -131,5 +162,5 @@
   },
   "pinData": {},
   "active": false,
-  "versionId": "2"
+  "versionId": "3"
 }
