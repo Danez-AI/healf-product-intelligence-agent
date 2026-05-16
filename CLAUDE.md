@@ -191,6 +191,7 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 - **Gotchas log:** `docs/gotchas.md` — running log of surprises and fixes
 - **Metafield extraction:** Shopify embeds metafields as `{"key":K,"value":V}` objects inside a `"metafields":[...]` array in the RSC payload — NOT as direct JSON properties. `extract_metafields` uses balanced-bracket JSON slicing anchored on `"metafields":[` (see `tools/ingest.py` and G-29 in gotchas.md). Regex on the array body is fragile and was the root cause of the ingredient extraction bug (G-10/G-29).
 - **Product loading:** All product fetching goes through `load_full_product(url) -> Product` in `healf_agent/tools/ingest.py`. Both `app.py` (Streamlit Fetch button) and `dispatch_tool("fetch_product")` call this helper — do not inline this logic anywhere else. Two diverged copies caused the Wave 16 regression (G-30).
+- **Per-flavour ingredient structure:** `Product.ingredients_by_flavour: dict[str, list[str]] | None` preserves the per-flavour breakdown for multi-flavour products. The flat `Product.ingredients` field is kept unchanged for backward compat (eval/consistency/draft tools use it). `check_field` enriches ingredient answers with `per_flavour` and `all_flavours` when structured data is available (see G-31).
 
 ## Workflow for Next Session
 

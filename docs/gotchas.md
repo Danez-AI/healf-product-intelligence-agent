@@ -307,3 +307,13 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 **Why scan all occurrences:** RSC is multiple concatenated JSON chunks; `"metafields":[` can appear more than once with varying completeness. Keep the longest value per key.  
 **Implementation:** `extract_metafields` in `healf_agent/tools/ingest.py` (uses `_slice_balanced_array` helper).  
 **Fixed:** 2026-05-16 Session 12 — `_METAFIELD_RE` regex replaced, G-10 misdiagnosis corrected.
+
+---
+
+## G-31: Multi-flavour ingredient blobs were flattened — per-flavour structure lost
+
+**Symptom:** Agent marks both Malic Acid and Citric Acid as present in all flavours of a Variety Pack; adds caveat "the ingredient data appears to be stored as a single combined list." Both claims are wrong — the metafield *does* break out ingredients per flavour.  
+**Root cause:** `_split_ingredient_blob` (the original helper) deduplicates across flavours into a single flat list. `check_field("ingredient", "malic acid")` returned `present: True` but had no way to surface "only in Watermelon."  
+**Fix:** Added `_split_ingredient_blob_by_flavour(blob) -> dict[str, list[str]]` in `healf_agent/tools/ingest.py`. `load_full_product` now populates `Product.ingredients_by_flavour` when headers are detected. `check_field` enriches ingredient answers with `per_flavour: [...]` and `all_flavours: [...]` so the agent can say "malic acid is only in Watermelon — the other three flavours use citric acid."  
+**Backward compat:** `Product.ingredients` (flat deduplicated list) is unchanged — all existing tools (eval, consistency, draft, compare) continue to work.  
+**Added:** 2026-05-16 Session 14 — Wave 17.
