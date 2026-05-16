@@ -1,23 +1,45 @@
 # Healf Product Intelligence Agent
 
-A natural-language agent for Healf product pages — answers questions, evaluates listings against the site corpus, drafts copy improvements, and surfaces them through a Streamlit chat, an MCP server, and an n8n catalog-audit workflow.
+A natural-language agent for the Healf health & wellness marketplace. Load any Healf product URL and ask questions in plain English: the agent evaluates listings against the full site corpus, spots copy gaps, scores images via Gemini Vision, clusters review themes, drafts Healf-voice rewrites, and queues suggested edits for human review — all surfaced through a Streamlit chat, an MCP server, and an n8n catalog-audit workflow.
 
 ## Status
 
-Tier 1 (foundation) in progress. See `docs/superpowers/plans/` for the live build plans.
+✅ **Feature-complete.** 57 tests passing. Tier 1–3 shipped (Waves 0–14).
 
-## Quickstart
+## Architecture
+
+```
+Surfaces:   Streamlit chat  │  MCP server (FastMCP)  │  HTTP webhook (FastAPI → n8n)
+                             ↓
+Agent core: Anthropic SDK tool-use loop (claude-sonnet-4-6)
+                             ↓
+Tools:      fetch_product · fetch_reviews_full · check_field · benchmark_against_category
+            cluster_review_themes · score_images · check_consistency · evaluate_listing_quality
+            draft_rewrite · enqueue_hitl · compare_products
+                             ↓
+Storage:    SQLite  (products · reviews · corpus+embeddings · hitl_queue · eval_runs · review_themes)
+```
+
+## Quick Start
 
 ```bash
 python -m uv sync
 python -m uv run playwright install chromium
-cp .env.example .env  # fill in keys
+cp .env.example .env   # fill in 4 API keys (see table below)
+python -m uv run pytest -v
 python -m uv run streamlit run app.py
 ```
 
-## Architecture
+## Required Environment Variables
 
-See `docs/superpowers/plans/2026-05-15-healf-product-intelligence-agent.md`.
+| Variable | Purpose | Required for |
+|----------|---------|--------------|
+| `ANTHROPIC_API_KEY` | Agent LLM + eval LLM judge | Core agent, evals (eval-007, eval-009) |
+| `OPENAI_API_KEY` | Corpus embeddings (text-embedding-3-small) | Corpus kNN, benchmark, cluster |
+| `GEMINI_API_KEY` | Image scoring (Gemini 2.5 Flash) | `score_images` (eval-006) |
+| `YOTPO_APP_KEY` | Yotpo review API | `fetch_reviews_full` |
+
+`HEALF_USER_AGENT` is optional (sensible default included in `.env.example`).
 
 ## Surfaces
 
