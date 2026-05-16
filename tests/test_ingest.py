@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from healf_agent.tools.ingest import extract_json_ld, extract_metafields, parse_product
+from healf_agent.tools.ingest import (
+    extract_json_ld,
+    extract_metafields,
+    parse_product,
+    _clean_metafield_text,
+    _split_ingredient_blob,
+)
 
 
 FIXTURE = Path("tests/fixtures/lmnt-recharge-electrolytes-variety-pack.html")
@@ -31,9 +37,39 @@ def test_parse_product_lmnt_fixture() -> None:
     assert len(p.images) >= 1
 
 
-def test_extract_metafields_pulls_ingredients_when_present() -> None:
+def test_extract_metafields_returns_ingredients_from_lmnt_fixture() -> None:
     html = FIXTURE.read_text(encoding="utf-8")
     meta = extract_metafields(html)
-    # We don't assert exact shape (LMNT may or may not have ingredient metafield),
-    # but the function must return a dict and not raise.
-    assert isinstance(meta, dict)
+    assert isinstance(meta, dict), "extract_metafields must return a dict"
+    assert "ingredients" in meta, f"'ingredients' key missing from metafields; got keys: {list(meta.keys())}"
+    assert "Salt (Sodium Chloride)" in meta["ingredients"], (
+        f"Expected 'Salt (Sodium Chloride)' in ingredients metafield; got: {meta['ingredients'][:200]}"
+    )
+
+
+def test_extract_metafields_returns_multiple_keys() -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    meta = extract_metafields(html)
+    assert len(meta) >= 3, f"Expected at least 3 metafields; got {len(meta)}: {list(meta.keys())}"
+
+
+def test_clean_metafield_text_converts_br_and_entities() -> None:
+    assert _clean_metafield_text("A<br>B&amp;C") == "A\nB&C"
+    assert _clean_metafield_text("Hello<br/>World") == "Hello\nWorld"
+    assert _clean_metafield_text("") == ""
+
+
+def test_split_ingredient_blob_flat_and_deduplicated() -> None:
+    blob = (
+        "Citrus:\n"
+        "Salt (Sodium Chloride), Citric Acid, Magnesium Malate, Potassium Chloride\n"
+        "Mango Chili:\n"
+        "Salt (Sodium Chloride), Citric Acid, Magnesium Malate, Potassium Chloride\n"
+    )
+    items = _split_ingredient_blob(blob)
+    assert "Salt (Sodium Chloride)" in items
+    assert items[0] == "Salt (Sodium Chloride)"
+    # Duplicates across flavours must be collapsed
+    assert items.count("Salt (Sodium Chloride)") == 1
+    # Flavour headers must not appear as ingredients
+    assert not any(":" in i and len(i) < 30 and i.endswith(":") for i in items)
