@@ -197,12 +197,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", default="evals/golden.jsonl")
     parser.add_argument("--db", default=os.environ.get("HEALF_DB", "healf.sqlite"))
     parser.add_argument("--run-id", default=None)
-    parser.add_argument("--filter", default=None, help="Substring match on case id.")
+    parser.add_argument(
+        "--filter",
+        default=None,
+        help="Comma-separated exact case IDs to run (e.g. eval-001,eval-002).",
+    )
     args = parser.parse_args(argv)
 
     cases = load_cases(Path(args.cases))
     if args.filter:
-        cases = [c for c in cases if args.filter in c["id"]]
+        wanted = {part.strip() for part in args.filter.split(",") if part.strip()}
+        cases = [c for c in cases if c["id"] in wanted]
 
     storage = Storage(Path(args.db))
     storage.init_schema()

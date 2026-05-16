@@ -85,6 +85,19 @@ def test_summary_exit_code_is_zero_on_all_pass() -> None:
     assert code == 0
 
 
+def test_filter_exact_match_excludes_eval_009(tmp_path) -> None:
+    """--filter with a single exact ID must not match eval-009 (regression for G-20)."""
+    import sqlite3
+
+    from evals.runner import main
+
+    db = tmp_path / "evals.sqlite"
+    rc = main(["--cases", "evals/golden.jsonl", "--db", str(db), "--filter", "eval-001"])
+    assert rc == 0
+    rows = sqlite3.connect(db).execute("SELECT question_id FROM eval_runs").fetchall()
+    assert {r[0] for r in rows} == {"eval-001"}
+
+
 def test_run_case_records_dispatch_error(tmp_path) -> None:
     from evals.runner import run_case
     from healf_agent.storage import Storage
