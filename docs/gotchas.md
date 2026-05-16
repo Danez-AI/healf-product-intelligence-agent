@@ -82,12 +82,13 @@ user_message = product_ctx + user_input
 
 ---
 
-## G-10: LMNT has no ingredient list in JSON-LD or RSC metafields
+## G-10: ~~MISDIAGNOSIS~~ — LMNT ingredients ARE in RSC payload; regex was wrong → see G-29
 
-**Symptom:** `check_field(field="ingredient", value="sodium")` returns `present: false, evidence: []`  
-**Root cause:** LMNT's Healf listing doesn't expose ingredients in either the JSON-LD schema or the RSC flight payload. The RSC metafield regex found nothing  
-**Impact:** Ingredient-based queries will answer "not extracted" rather than the real ingredient list for products without structured ingredient data  
-**Workaround:** In Tier 3, we could add OCR of product images (Wave 8 vision tool) to extract ingredient panels from label photos
+**Original symptom:** `check_field(field="ingredient", value="sodium")` returned `present: false, evidence: []`  
+**Original misdiagnosis:** Claimed LMNT had no ingredient data in JSON-LD or RSC metafields  
+**Actual root cause:** The old `_METAFIELD_RE` regex looked for `"ingredients":"<value>"` (a direct JSON property), but Shopify embeds metafields as `{"key":"ingredients","value":"..."}` objects inside a `"metafields":[...]` array — a completely different shape that the regex never matched.  
+**Fix:** Replaced regex with bracket-walking JSON array decode anchored on `"metafields":[`. See G-29 for the correct extraction pattern and `healf_agent/tools/ingest.py` → `extract_metafields`.  
+**Status:** Resolved — 2026-05-16 Session 12
 
 ---
 
@@ -282,3 +283,17 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 **Applies to:** `n8n/healf-catalog-audit.json` — IF node, `convertTypesWhenComparing` must be `true`
 
 ---
+
+## G-29: Shopify metafields are `{key, value}` objects inside an array — NOT direct JSON properties
+
+**Symptom:** Ingredient/claim data silently missing; `extract_metafields` returns `{}`; agent says "sodium not found" for LMNT despite website listing "Salt (Sodium Chloride)".  
+**Root cause:** Shopify stores metafields in the RSC flight payload as a JSON array of objects: `"metafields":[null, {"key":"ingredients","value":"Citrus:\nSalt (Sodium Chloride)..."}]`. A regex looking for `"ingredients":"..."` (a direct key-value property) never matches this shape.  
+**Correct extraction pattern:**
+1. Find the literal `"metafields":[` in the decoded RSC text.
+2. Walk forward character-by-character, tracking `[`/`]` depth while respecting string boundaries (escaped chars), to find the matching `]`.
+3. Slice out the balanced substring and decode with `json.loads`.
+4. Iterate entries; for each non-null `{"key": K, "value": V}` dict, clean V (strip `<br>` HTML, unescape entities) and store `{K: V}`.
+**Why not regex:** Metafield values contain commas, nested brackets, `<br>` tags, and escaped quotes — all of which break `[^\]]*` and similar patterns.  
+**Why scan all occurrences:** RSC is multiple concatenated JSON chunks; `"metafields":[` can appear more than once with varying completeness. Keep the longest value per key.  
+**Implementation:** `extract_metafields` in `healf_agent/tools/ingest.py` (uses `_slice_balanced_array` helper).  
+**Fixed:** 2026-05-16 Session 12 — `_METAFIELD_RE` regex replaced, G-10 misdiagnosis corrected.

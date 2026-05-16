@@ -189,6 +189,7 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 - **Product context injection:** `app.py` prepends product title/brand/URL/ingredients/claims to every user message so the agent knows what's loaded
 - **Execution mode:** superpowers:subagent-driven-development — one subagent per task, spec + quality review after each
 - **Gotchas log:** `docs/gotchas.md` — running log of surprises and fixes
+- **Metafield extraction:** Shopify embeds metafields as `{"key":K,"value":V}` objects inside a `"metafields":[...]` array in the RSC payload — NOT as direct JSON properties. `extract_metafields` uses balanced-bracket JSON slicing anchored on `"metafields":[` (see `tools/ingest.py` and G-29 in gotchas.md). Regex on the array body is fragile and was the root cause of the ingredient extraction bug (G-10/G-29).
 
 ## Workflow for Next Session
 
