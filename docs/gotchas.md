@@ -284,6 +284,16 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 
 ---
 
+## G-30: Two product-load code paths drifted after Wave 15 — Streamlit showed `present: null` despite tests passing
+
+**Symptom:** All 67 tests passed post-Wave-15, but clicking **Fetch** in the live Streamlit app and asking "Does this product have sodium?" still returned `present: null, extraction_status: "no_metafields"`.  
+**Root cause:** `app.py` has its own inline product-load block (lines 38-50) that predated the dispatcher. Wave 15 updated `dispatch_tool("fetch_product")` in `healf_agent/tools/__init__.py` but left `app.py`'s copy intact. The copy still called `meta.get("ingredient")` (singular), whereas the new extractor returns `"ingredients"` (plural Shopify key). `raw_metafields` was never set, so `check_field` correctly returned `present: null`.  
+**Fix:** Extracted a single `load_full_product(url) -> Product` helper in `healf_agent/tools/ingest.py`. Both `app.py` and `dispatch_tool("fetch_product")` now call it — one source of truth, zero drift.  
+**Lesson:** Whenever you change ingestion shape, `grep -n "extract_metafields("` across the repo to find every caller and update all of them. Unit tests only cover the paths they exercise; the Streamlit UI's load path was untested.  
+**Fixed:** 2026-05-16 Session 12 (Wave 16) — `load_full_product` helper introduced; `test_load_full_product_populates_ingredients_and_metafields` added.
+
+---
+
 ## G-29: Shopify metafields are `{key, value}` objects inside an array — NOT direct JSON properties
 
 **Symptom:** Ingredient/claim data silently missing; `extract_metafields` returns `{}`; agent says "sodium not found" for LMNT despite website listing "Salt (Sodium Chloride)".  
