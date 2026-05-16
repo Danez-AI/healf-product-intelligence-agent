@@ -3,6 +3,7 @@ from pathlib import Path
 from healf_agent.tools.ingest import (
     extract_json_ld,
     extract_metafields,
+    load_full_product,
     parse_product,
     _clean_metafield_text,
     _split_ingredient_blob,
@@ -57,6 +58,20 @@ def test_clean_metafield_text_converts_br_and_entities() -> None:
     assert _clean_metafield_text("A<br>B&amp;C") == "A\nB&C"
     assert _clean_metafield_text("Hello<br/>World") == "Hello\nWorld"
     assert _clean_metafield_text("") == ""
+
+
+def test_load_full_product_populates_ingredients_and_metafields(monkeypatch) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    # Patch on the source module — load_full_product uses a local import from navigate
+    import healf_agent.tools.navigate as _nav
+    monkeypatch.setattr(_nav, "fetch_product_page", lambda url: html)
+    product = load_full_product("https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack")
+    assert isinstance(product.raw_metafields, dict), "raw_metafields must be a dict"
+    assert len(product.raw_metafields) >= 3, f"expected >=3 metafields; got {list(product.raw_metafields.keys())}"
+    assert product.ingredients, "ingredients must be non-empty"
+    assert any("sodium chloride" in i.lower() for i in product.ingredients), (
+        f"Salt (Sodium Chloride) not found in ingredients: {product.ingredients[:5]}"
+    )
 
 
 def test_split_ingredient_blob_flat_and_deduplicated() -> None:

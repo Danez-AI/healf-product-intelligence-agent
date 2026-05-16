@@ -11,8 +11,7 @@ from dotenv import load_dotenv
 from healf_agent.agent import run_agent_turn
 from healf_agent.models import Product
 from healf_agent.storage import Storage
-from healf_agent.tools.ingest import extract_metafields, parse_product
-from healf_agent.tools.navigate import fetch_product_page
+from healf_agent.tools.ingest import load_full_product
 
 from pages.hitl import run as hitl_run
 
@@ -37,14 +36,7 @@ def chat_page() -> None:
 
     if fetch and url:
         with st.spinner("Fetching..."):
-            html = fetch_product_page(url)
-            product = parse_product(html, url=url)
-            meta = extract_metafields(html)
-            if meta.get("ingredient"):
-                ings = meta["ingredient"]
-                product = product.model_copy(
-                    update={"ingredients": list(ings) if isinstance(ings, list) else [ings]}
-                )
+            product = load_full_product(url)
             storage.upsert_product(product)
             st.session_state["product"] = product.model_dump(mode="json")
             st.success(f"Loaded {product.title}")

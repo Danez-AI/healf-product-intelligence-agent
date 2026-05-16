@@ -4,6 +4,7 @@ from __future__ import annotations
 import html as _html
 import json
 import re
+from typing import Any
 from urllib.parse import urlparse
 
 from selectolax.parser import HTMLParser
@@ -207,3 +208,27 @@ def extract_metafields(html: str) -> dict[str, str]:
                     out[key] = cleaned
         search_from = start_bracket + len(raw)
     return out
+
+
+def load_full_product(url: str) -> Product:
+    """Fetch a Healf PDP and return a fully-populated Product.
+
+    Single source of truth for product loading — called by both app.py
+    (Streamlit Fetch button) and dispatch_tool('fetch_product'). Populates
+    ingredients, claims, and raw_metafields from the RSC metafield array.
+    """
+    from healf_agent.tools.navigate import fetch_product_page  # local import avoids circular dep
+
+    html_text = fetch_product_page(url)
+    p = parse_product(html_text, url=url)
+    meta = extract_metafields(html_text)
+    updates: dict[str, Any] = {"raw_metafields": meta or None}
+    if not p.ingredients:
+        blob = meta.get("ingredients") or meta.get("ingredient")
+        if blob:
+            updates["ingredients"] = _split_ingredient_blob(blob)
+    if not p.claims:
+        claims_blob = meta.get("claims") or meta.get("why_its_healf")
+        if claims_blob:
+            updates["claims"] = [c.strip() for c in claims_blob.split("\n") if c.strip()][:10]
+    return p.model_copy(update=updates)
