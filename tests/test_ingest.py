@@ -9,6 +9,7 @@ from healf_agent.tools.ingest import (
     _split_ingredient_blob,
     _split_ingredient_blob_by_flavour,
     _extract_descriptive_text,
+    _extract_variant_base_image_urls,
 )
 
 
@@ -160,3 +161,36 @@ def test_load_full_product_populates_ingredients_by_flavour(monkeypatch) -> None
     assert any("Malic Acid" in i for i in wm), f"Malic Acid not in Watermelon: {wm}"
     citrus = product.ingredients_by_flavour.get("Citrus", [])
     assert not any("Malic Acid" in i for i in citrus), f"Malic Acid incorrectly in Citrus: {citrus}"
+
+
+def test_load_full_product_extracts_multiple_images_lmnt(monkeypatch) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    import healf_agent.tools.navigate as _nav
+    monkeypatch.setattr(_nav, "fetch_product_page", lambda url: html)
+    product = load_full_product("https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack")
+    assert len(product.images) >= 2, (
+        f"Expected >=2 images after merging RSC flight sources; got {len(product.images)}: "
+        f"{[str(img.url) for img in product.images]}"
+    )
+
+
+def test_extract_variant_base_images_parses_json() -> None:
+    # Minimal synthetic flight fragment matching the format in Healf's RSC payload
+    snippet = (
+        r'{"key":"variant_base_images","value":"[{\"src\":\"https://cdn.shopify.com/s/files/1/0405/img1.png\",\"altText\":null},'
+        r'{\"src\":\"https://cdn.shopify.com/s/files/1/0405/img2.png\",\"altText\":null}]"}'
+    )
+    urls = _extract_variant_base_image_urls(snippet)
+    assert "https://cdn.shopify.com/s/files/1/0405/img1.png" in urls
+    assert "https://cdn.shopify.com/s/files/1/0405/img2.png" in urls
+    assert len(urls) == 2
+
+
+def test_image_dedup_preserves_order(monkeypatch) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    import healf_agent.tools.navigate as _nav
+    monkeypatch.setattr(_nav, "fetch_product_page", lambda url: html)
+    product = load_full_product("https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack")
+    urls = [str(img.url) for img in product.images]
+    # No duplicates
+    assert len(urls) == len(set(urls)), f"Duplicate image URLs found: {urls}"

@@ -68,6 +68,85 @@ def _images_from_block(block: dict) -> list[Image]:
     return [Image(url=u) for u in raw if isinstance(u, str)]
 
 
+_VARIANT_BASE_IMAGES_RE = re.compile(
+    r'"key"\s*:\s*"variant_base_images"\s*,\s*"value"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"'
+)
+_CDN_IMG_DIRECT_RE = re.compile(
+    r'https://cdn\.shopify\.com/s/files/[^"\\]+\.(?:png|jpe?g|webp)',
+    re.IGNORECASE,
+)
+_SHOPIFY_IMG_RE = re.compile(
+    r'https://(?:cdn\.shopify\.com/s/files|f\d+\.backblazeb2\.com)/[^\s"\\]+\.(?:png|jpe?g|webp)',
+    re.IGNORECASE,
+)
+
+
+def _extract_variant_base_image_urls(flight_text: str) -> list[str]:
+    """Extract image URLs from the variant_base_images metafield in the RSC flight payload.
+
+    The metafield value is a JSON-encoded string containing an array of objects
+    with a ``src`` key, e.g.::
+
+        {"key":"variant_base_images","value":"[{\\"src\\":\\"https://cdn.shopify.com/...\\"}]"}
+
+    Returns a deduplicated list of URLs (first-seen order).  Never raises.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+
+    if "variant_base_images" not in flight_text:
+        return out
+
+    for m in _VARIANT_BASE_IMAGES_RE.finditer(flight_text):
+        raw_value = m.group(1)
+        try:
+            # The captured string is JSON-escaped; decode it to get the inner JSON array.
+            decoded = json.loads(f'"{raw_value}"')
+            arr = json.loads(decoded)
+            if isinstance(arr, list):
+                for obj in arr:
+                    if isinstance(obj, dict):
+                        src = obj.get("src")
+                        if isinstance(src, str) and src and src not in seen:
+                            seen.add(src)
+                            out.append(src)
+        except Exception:
+            pass
+
+    # Fallback: if JSON parsing found nothing, scan for CDN URLs near the anchor
+    if not out:
+        try:
+            anchor = flight_text.find('"variant_base_images"')
+            if anchor != -1:
+                region = flight_text[anchor: anchor + 4096]
+                for url in _CDN_IMG_DIRECT_RE.findall(region):
+                    if url not in seen:
+                        seen.add(url)
+                        out.append(url)
+        except Exception:
+            pass
+
+    return out
+
+
+def _fallback_shopify_image_urls(flight_text: str) -> list[str]:
+    """Scan the full RSC flight text for any Shopify/Backblaze CDN image URLs.
+
+    Used as a last-resort catch-all when variant_base_images yields < 2 images.
+    Never raises.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    try:
+        for url in _SHOPIFY_IMG_RE.findall(flight_text):
+            if url not in seen:
+                seen.add(url)
+                out.append(url)
+    except Exception:
+        pass
+    return out
+
+
 def parse_product(html: str, *, url: str) -> Product:
     blocks = extract_json_ld(html)
     pblock = _first_product_block(blocks)
@@ -298,8 +377,35 @@ def load_full_product(url: str) -> Product:
 
     html_text = fetch_product_page(url)
     p = parse_product(html_text, url=url)
+
+    # Merge image sources: JSON-LD hero + variant_base_images + CDN fallback
+    flight_text = extract_rsc_flight(html_text)
+    merged_urls: list[str] = [str(img.url) for img in p.images]
+    seen_urls: set[str] = set(merged_urls)
+
+    variant_urls = _extract_variant_base_image_urls(flight_text)
+    for u in variant_urls:
+        if u not in seen_urls:
+            seen_urls.add(u)
+            merged_urls.append(u)
+
+    if len(merged_urls) < 2:
+        for u in _fallback_shopify_image_urls(flight_text):
+            if u not in seen_urls:
+                seen_urls.add(u)
+                merged_urls.append(u)
+
     meta = extract_metafields(html_text)
     updates: dict[str, Any] = {"raw_metafields": meta or None}
+
+    if len(merged_urls) > len(p.images):
+        valid_images = []
+        for u in merged_urls:
+            try:
+                valid_images.append(Image(url=u))
+            except Exception:
+                pass
+        updates["images"] = valid_images
     if not p.ingredients:
         blob = meta.get("ingredients") or meta.get("ingredient")
         if blob:
