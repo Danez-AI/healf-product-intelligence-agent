@@ -109,6 +109,56 @@ _METAFIELD_ANCHOR = '"metafields":['
 _BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _TAG_RE = re.compile(r"<[^>]+>")
 _FLAVOUR_HEADER_RE = re.compile(r"^[A-Z][A-Za-z0-9 &\-/]{1,40}:\s*$")
+# RSC Flight pointers look like "$24" — they are unresolved React server component refs.
+_RSC_PTR_RE = re.compile(r"^\$\d+$")
+
+
+def _extract_descriptive_text(html: str, meta: dict[str, str]) -> str:
+    """Combine page-body prose from HTML + already-extracted metafields.
+
+    Sources (in order):
+      - <div class="old-description"> — EFSA-style benefit bullets + paragraphs.
+        On Healf Next.js pages this div lives inside the RSC Flight payload as
+        escaped HTML, so we parse the decoded flight text rather than the raw DOM.
+      - meta["why_its_healf"]  — brand origin / curation reason.
+      - meta["suggested_use"]  — usage instructions.
+
+    RSC Flight pointer values (e.g. "$24") are skipped — they are unresolved
+    server-component references that contain no useful text.
+
+    Returns a markdown-ish string with ## section headers, or "" if nothing found.
+    """
+    sections: list[str] = []
+
+    # The old-description div is embedded as escaped HTML inside __next_f.push()
+    # strings in the RSC payload. Decode the flight text and parse that instead
+    # of the raw page DOM, where the div is invisible to selectolax.
+    flight = extract_rsc_flight(html)
+    parse_source = flight if flight else html
+    tree = HTMLParser(parse_source)
+    desc_node = tree.css_first("div.old-description")
+    if desc_node:
+        lines: list[str] = []
+        for li in desc_node.css("li"):
+            text = (li.text() or "").strip()
+            if text:
+                lines.append(f"- {text}")
+        for p in desc_node.css("p"):
+            text = (p.text() or "").strip()
+            if text:
+                lines.append(text)
+        if lines:
+            sections.append("## Description\n" + "\n".join(lines))
+
+    why = (meta.get("why_its_healf") or "").strip()
+    if why and not _RSC_PTR_RE.match(why):
+        sections.append("## Why It's Healf\n" + why)
+
+    use = (meta.get("suggested_use") or "").strip()
+    if use and not _RSC_PTR_RE.match(use):
+        sections.append("## Suggested Use\n" + use)
+
+    return "\n\n".join(sections)
 
 
 def _clean_metafield_text(raw: str) -> str:
@@ -257,6 +307,9 @@ def load_full_product(url: str) -> Product:
             if by_flav:
                 updates["ingredients_by_flavour"] = by_flav
             updates["ingredients"] = _split_ingredient_blob(blob)
+    page_text = _extract_descriptive_text(html_text, meta)
+    if page_text:
+        updates["page_text"] = page_text
     if not p.claims:
         claims_blob = meta.get("claims") or meta.get("why_its_healf")
         if claims_blob:

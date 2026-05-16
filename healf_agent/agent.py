@@ -19,6 +19,7 @@ Rules:
 - Refuse politely if the user asks about anything outside the Healf catalogue.
 - When check_field returns present: null with extraction_status "no_metafields", do NOT claim the field is absent — say the structured data extraction failed and suggest a manual check on the live page.
 - When check_field returns per_flavour: [...] and all_flavours: [...], surface those flavours by name. Say e.g. "malic acid is only in Watermelon" — do NOT say "all flavours contain X" unless per_flavour == all_flavours.
+- The user message may include a "--- Page description text ---" block containing prose from the product page (benefits bullets, "Why It's Healf" curation reason, suggested use). When the user asks about benefits, what the product does, claims it makes, or how to use it, read this block before answering. Do NOT say "the claims field is empty" or "I'd recommend a manual check" if the page description text contains the answer — quote it directly.
 """
 
 

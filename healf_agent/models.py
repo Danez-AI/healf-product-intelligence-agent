@@ -54,6 +54,7 @@ class Product(BaseModel):
     raw_jsonld: dict | None = None
     raw_metafields: dict | None = None
     ingredients_by_flavour: dict[str, list[str]] | None = None
+    page_text: str | None = None
 
     @field_validator("handle")
     @classmethod

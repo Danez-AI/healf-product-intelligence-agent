@@ -8,6 +8,7 @@ from healf_agent.tools.ingest import (
     _clean_metafield_text,
     _split_ingredient_blob,
     _split_ingredient_blob_by_flavour,
+    _extract_descriptive_text,
 )
 
 
@@ -108,6 +109,44 @@ def test_split_ingredient_blob_by_flavour_preserves_structure() -> None:
     assert not any("Malic Acid" in i for i in result["Citrus"])
     assert any("Citric Acid" in i for i in result["Citrus"])
     assert not any("Citric Acid" in i for i in result["Watermelon"])
+
+
+def test_extract_descriptive_text_combines_html_and_metafields() -> None:
+    html = (
+        '<html><body>'
+        '<div class="old-description">'
+        '<ul><li>Hydrates</li><li>Refuels</li></ul>'
+        '<p>For active lifestyles.</p>'
+        '</div></body></html>'
+    )
+    meta = {"why_its_healf": "Founder pick", "suggested_use": "Mix with 500ml water"}
+    result = _extract_descriptive_text(html, meta)
+    assert "- Hydrates" in result
+    assert "- Refuels" in result
+    assert "For active lifestyles." in result
+    assert "Founder pick" in result
+    assert "Mix with 500ml water" in result
+    assert "## Description" in result
+    assert "## Why It's Healf" in result
+    assert "## Suggested Use" in result
+
+
+def test_load_full_product_populates_page_text_from_lmnt_fixture(monkeypatch) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    import healf_agent.tools.navigate as _nav
+    monkeypatch.setattr(_nav, "fetch_product_page", lambda url: html)
+    product = load_full_product("https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack")
+    assert product.page_text is not None, "page_text must be populated for LMNT fixture"
+    # Benefit prose from old-description div (inside RSC flight payload)
+    assert "electrolyte" in product.page_text.lower(), (
+        f"Expected 'electrolyte' from benefits section in page_text; got: {product.page_text[:300]}"
+    )
+    # Suggested use metafield is real text (not an RSC pointer)
+    assert "## Suggested Use" in product.page_text, (
+        f"Expected Suggested Use section in page_text; got: {product.page_text[:300]}"
+    )
+    # RSC pointer values must not appear as section content
+    assert "$24" not in product.page_text, "RSC pointer '$24' must be filtered from page_text"
 
 
 def test_load_full_product_populates_ingredients_by_flavour(monkeypatch) -> None:

@@ -71,6 +71,12 @@ def chat_page() -> None:
                         f"Ingredients: {', '.join(product.ingredients) or 'not extracted'}. "
                         f"Claims: {', '.join(product.claims) or 'not extracted'}.\n\n"
                     )
+                    if product.page_text:
+                        product_ctx += (
+                            "--- Page description text (use this for benefit/use questions) ---\n"
+                            f"{product.page_text}\n"
+                            "--- end page description ---\n\n"
+                        )
                     user_message = product_ctx + user_input
                 else:
                     user_message = user_input
