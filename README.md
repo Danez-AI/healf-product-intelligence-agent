@@ -4,7 +4,7 @@ A natural-language agent for the Healf health & wellness marketplace. Load any H
 
 ## Status
 
-✅ **Feature-complete.** 57 tests passing. Tier 1–3 shipped (Waves 0–14).
+✅ **Feature-complete.** 87 tests passing. Tier 1–4 + accuracy waves (16–19) + Editorial Wellness UI.
 
 ## Architecture
 
@@ -19,6 +19,14 @@ Tools:      fetch_product · fetch_reviews_full · check_field · benchmark_agai
                              ↓
 Storage:    SQLite  (products · reviews · corpus+embeddings · hitl_queue · eval_runs · review_themes)
 ```
+
+## What's in the MVP today
+
+- **11 agent tools** spanning Navigate / Ingest / Evaluate / Act — ingredient lookups, rubric evaluation, image scoring via Gemini Vision, review clustering, copy rewriting, cross-product comparison, and HITL queue
+- **Three surfaces:** Streamlit chat, MCP server (FastMCP stdio), FastAPI webhook + n8n catalog-audit workflow
+- **150-product corpus** with OpenAI embeddings for kNN benchmarking, shipped as `corpus.sqlite`
+- **Persistent multi-session chat history** (SQLite) with full debug bundle per response (per-iteration prompts, tokens, latency)
+- **HITL approval queue** for AI-drafted copy improvements (`pages/hitl.py`)
 
 ## Quick Start
 
@@ -49,7 +57,9 @@ The same agent core is reachable three ways:
 ```bash
 python -m uv run streamlit run app.py
 ```
-HITL queue at `pages/hitl.py` (sidebar nav). See `docs/gotchas.md` G-19 for stale-process cleanup.
+Persistent multi-session history, debug/observability expanders per response, Editorial Wellness theme (Fraunces + Manrope, sage/paper palette). HITL queue at `pages/hitl.py` (sidebar nav). See `docs/gotchas.md` G-19 for stale-process cleanup.
+
+> **Note:** HITL queue page has a known UI-state bug under specific reload sequences — see `docs/gotchas.md` G-17.
 
 ### 2. MCP server
 ```bash
