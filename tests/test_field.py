@@ -73,3 +73,23 @@ def test_check_field_claim_present_none_when_no_metafields() -> None:
     out = check_field(p, field="claim", value="zero sugar")
     assert out["present"] is None
     assert out["extraction_status"] == "no_metafields"
+
+
+def test_check_field_ingredient_per_flavour_for_malic_acid() -> None:
+    by_flav = {"Citrus": ["Citric Acid", "Salt (Sodium Chloride)"], "Watermelon": ["Malic Acid", "Salt (Sodium Chloride)"]}
+    flat = ["Citric Acid", "Malic Acid", "Salt (Sodium Chloride)"]
+    p = _p(ingredients=flat, raw_metafields={"ingredients": "..."}, ingredients_by_flavour=by_flav)
+    out = check_field(p, field="ingredient", value="malic acid")
+    assert out["present"] is True
+    assert out["per_flavour"] == ["Watermelon"]
+    assert set(out["all_flavours"]) == {"Citrus", "Watermelon"}
+
+
+def test_check_field_ingredient_per_flavour_for_citric_acid() -> None:
+    by_flav = {"Citrus": ["Citric Acid", "Salt (Sodium Chloride)"], "Watermelon": ["Malic Acid", "Salt (Sodium Chloride)"]}
+    flat = ["Citric Acid", "Malic Acid", "Salt (Sodium Chloride)"]
+    p = _p(ingredients=flat, raw_metafields={"ingredients": "..."}, ingredients_by_flavour=by_flav)
+    out = check_field(p, field="ingredient", value="citric acid")
+    assert out["present"] is True
+    assert out["per_flavour"] == ["Citrus"]
+    assert set(out["all_flavours"]) == {"Citrus", "Watermelon"}

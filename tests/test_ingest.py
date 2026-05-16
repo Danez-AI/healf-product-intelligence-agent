@@ -7,6 +7,7 @@ from healf_agent.tools.ingest import (
     parse_product,
     _clean_metafield_text,
     _split_ingredient_blob,
+    _split_ingredient_blob_by_flavour,
 )
 
 
@@ -88,3 +89,35 @@ def test_split_ingredient_blob_flat_and_deduplicated() -> None:
     assert items.count("Salt (Sodium Chloride)") == 1
     # Flavour headers must not appear as ingredients
     assert not any(":" in i and len(i) < 30 and i.endswith(":") for i in items)
+
+
+def test_split_ingredient_blob_by_flavour_preserves_structure() -> None:
+    blob = (
+        "Citrus:\n"
+        "Salt (Sodium Chloride), Citric Acid, Magnesium Malate, Potassium Chloride, Natural Lemon & Lime Flavors, Stevia Leaf Extract\n"
+        "Raspberry:\n"
+        "Salt (Sodium Chloride), Citric Acid, Magnesium Malate, Potassium Chloride, Natural Raspberry Flavor, Stevia Leaf Extract\n"
+        "Lemonade:\n"
+        "Salt (Sodium Chloride), Citric Acid, Magnesium Malate, Potassium Chloride, Natural Lemon Flavor, Stevia Leaf Extract\n"
+        "Watermelon:\n"
+        "Salt (Sodium Chloride), Malic Acid, Magnesium Malate, Potassium Chloride, Natural Watermelon Flavor, Stevia Leaf Extract\n"
+    )
+    result = _split_ingredient_blob_by_flavour(blob)
+    assert set(result.keys()) == {"Citrus", "Raspberry", "Lemonade", "Watermelon"}
+    assert any("Malic Acid" in i for i in result["Watermelon"])
+    assert not any("Malic Acid" in i for i in result["Citrus"])
+    assert any("Citric Acid" in i for i in result["Citrus"])
+    assert not any("Citric Acid" in i for i in result["Watermelon"])
+
+
+def test_load_full_product_populates_ingredients_by_flavour(monkeypatch) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    import healf_agent.tools.navigate as _nav
+    monkeypatch.setattr(_nav, "fetch_product_page", lambda url: html)
+    product = load_full_product("https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack")
+    assert product.ingredients_by_flavour is not None, "ingredients_by_flavour must be populated for multi-flavour product"
+    assert "Watermelon" in product.ingredients_by_flavour, f"Watermelon not found; keys: {list(product.ingredients_by_flavour.keys())}"
+    wm = product.ingredients_by_flavour["Watermelon"]
+    assert any("Malic Acid" in i for i in wm), f"Malic Acid not in Watermelon: {wm}"
+    citrus = product.ingredients_by_flavour.get("Citrus", [])
+    assert not any("Malic Acid" in i for i in citrus), f"Malic Acid incorrectly in Citrus: {citrus}"

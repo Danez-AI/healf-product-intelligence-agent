@@ -149,6 +149,33 @@ def _slice_balanced_array(text: str, start_bracket: int) -> str | None:
     return None
 
 
+def _split_ingredient_blob_by_flavour(blob: str) -> dict[str, list[str]]:
+    """Parse a multi-flavour ingredient blob into {flavour_name: [ingredient, ...]}.
+
+    Returns empty dict for single-flavour blobs (no headers detected).
+    Preserves per-flavour duplication and order — do NOT dedupe across flavours.
+    """
+    if not blob:
+        return {}
+    by_flavour: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in blob.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if _FLAVOUR_HEADER_RE.match(line):
+            current = line.rstrip(":").strip()
+            by_flavour.setdefault(current, [])
+            continue
+        if current is None:
+            continue
+        for raw_ing in line.split(","):
+            ing = raw_ing.strip().rstrip(".")
+            if ing:
+                by_flavour[current].append(ing)
+    return by_flavour
+
+
 def _split_ingredient_blob(blob: str) -> list[str]:
     """Split a multi-flavour ingredient blob into a flat, deduplicated ingredient list."""
     if not blob:
@@ -226,6 +253,9 @@ def load_full_product(url: str) -> Product:
     if not p.ingredients:
         blob = meta.get("ingredients") or meta.get("ingredient")
         if blob:
+            by_flav = _split_ingredient_blob_by_flavour(blob)
+            if by_flav:
+                updates["ingredients_by_flavour"] = by_flav
             updates["ingredients"] = _split_ingredient_blob(blob)
     if not p.claims:
         claims_blob = meta.get("claims") or meta.get("why_its_healf")

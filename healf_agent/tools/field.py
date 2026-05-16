@@ -24,7 +24,16 @@ def check_field(product: Product, *, field: str, value: str = "") -> dict:
         if product.ingredients:
             needle = value.lower()
             present = any(needle in i.lower() for i in product.ingredients) if needle else True
-            return {"present": present, "evidence": product.ingredients, "extraction_status": "ok"}
+            result: dict = {"present": present, "evidence": product.ingredients, "extraction_status": "ok"}
+            if product.ingredients_by_flavour and needle:
+                per_flav = [
+                    flav for flav, ings in product.ingredients_by_flavour.items()
+                    if any(needle in i.lower() for i in ings)
+                ]
+                if per_flav:
+                    result["per_flavour"] = per_flav
+                    result["all_flavours"] = list(product.ingredients_by_flavour.keys())
+            return result
         if product.raw_metafields is not None:
             return {"present": False, "evidence": [], "extraction_status": "ok"}
         return {"field": field, "present": None, "value": None, "extraction_status": "no_metafields"}
