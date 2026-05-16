@@ -5,7 +5,7 @@ from typing import Any
 
 from healf_agent.models import Product
 from healf_agent.tools.field import check_field
-from healf_agent.tools.ingest import parse_product, extract_metafields
+from healf_agent.tools.ingest import parse_product, extract_metafields, _split_ingredient_blob
 from healf_agent.tools.navigate import fetch_product_page
 
 
@@ -104,11 +104,16 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
         html = fetch_product_page(arguments["url"])
         p = parse_product(html, url=arguments["url"])
         meta = extract_metafields(html)
-        if meta.get("ingredient"):
-            ings = meta["ingredient"]
-            if isinstance(ings, str):
-                ings = [ings]
-            p = p.model_copy(update={"ingredients": list(ings)})
+        updates: dict[str, Any] = {"raw_metafields": meta or None}
+        if not p.ingredients:
+            blob = meta.get("ingredients") or meta.get("ingredient")
+            if blob:
+                updates["ingredients"] = _split_ingredient_blob(blob)
+        if not p.claims:
+            claims_blob = meta.get("claims") or meta.get("why_its_healf")
+            if claims_blob:
+                updates["claims"] = [c.strip() for c in claims_blob.split("\n") if c.strip()][:10]
+        p = p.model_copy(update=updates)
         return p.model_dump(mode="json")
     if name == "check_field":
         if product is None:
@@ -230,8 +235,6 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
         return report.model_dump(mode="json")
     if name == "compare_products":
         from healf_agent.tools.compare import compare_products
-        from healf_agent.tools.navigate import fetch_product_page
-        from healf_agent.tools.ingest import parse_product
 
         urls = arguments.get("urls", [])
         if len(urls) < 2:

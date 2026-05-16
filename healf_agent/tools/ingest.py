@@ -1,6 +1,7 @@
 """Ingest capability: parse PDP HTML into a Product."""
 from __future__ import annotations
 
+import html as _html
 import json
 import re
 from urllib.parse import urlparse
@@ -103,24 +104,106 @@ def parse_product(html: str, *, url: str) -> Product:
     )
 
 
-_METAFIELD_RE = re.compile(
-    r'"(?P<key>(?:ingredients?|claims?|benefits?|how_to_use|directions?|metafield))"\s*:\s*(?P<val>"(?:[^"\\]|\\.)*"|\[[^\]]*\])',
-    re.IGNORECASE,
-)
+_METAFIELD_ANCHOR = '"metafields":['
+_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
+_TAG_RE = re.compile(r"<[^>]+>")
+_FLAVOUR_HEADER_RE = re.compile(r"^[A-Z][A-Za-z0-9 &\-/]{1,40}:\s*$")
 
 
-def extract_metafields(html: str) -> dict[str, object]:
-    """Pull ingredient/claim-like metafields from the RSC flight payload."""
+def _clean_metafield_text(raw: str) -> str:
+    """Convert <br> to newlines, strip HTML tags, unescape entities."""
+    if not raw:
+        return ""
+    s = _BR_RE.sub("\n", raw)
+    s = _TAG_RE.sub("", s)
+    s = _html.unescape(s)
+    return s.strip()
+
+
+def _slice_balanced_array(text: str, start_bracket: int) -> str | None:
+    """Return text[start_bracket : matching_close+1], tracking string boundaries."""
+    depth = 0
+    i = start_bracket
+    in_string = False
+    escape = False
+    while i < len(text):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    return text[start_bracket : i + 1]
+        i += 1
+    return None
+
+
+def _split_ingredient_blob(blob: str) -> list[str]:
+    """Split a multi-flavour ingredient blob into a flat, deduplicated ingredient list."""
+    if not blob:
+        return []
+    items: list[str] = []
+    seen: set[str] = set()
+    for line in blob.splitlines():
+        line = line.strip()
+        if not line or _FLAVOUR_HEADER_RE.match(line):
+            continue
+        for raw_ing in line.split(","):
+            ing = raw_ing.strip().rstrip(".")
+            if not ing:
+                continue
+            key = ing.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(ing)
+    return items
+
+
+def extract_metafields(html: str) -> dict[str, str]:
+    """Extract all Shopify metafields from the RSC flight payload.
+
+    Shopify embeds metafields as ``{"key": ..., "value": ...}`` objects inside a
+    ``"metafields":[...]`` array in the Next.js RSC flight payload.  Bracket-walking
+    is used instead of regex because metafield values routinely contain commas,
+    brackets, and HTML — all of which break naive ``[^\\]]*`` patterns.
+    """
     flight = extract_rsc_flight(html)
     if not flight:
         return {}
-    out: dict[str, object] = {}
-    for m in _METAFIELD_RE.finditer(flight):
-        key = m.group("key").lower().rstrip("s")
-        raw = m.group("val")
+    out: dict[str, str] = {}
+    search_from = 0
+    while True:
+        anchor = flight.find(_METAFIELD_ANCHOR, search_from)
+        if anchor == -1:
+            break
+        start_bracket = anchor + len(_METAFIELD_ANCHOR) - 1  # the '['
+        raw = _slice_balanced_array(flight, start_bracket)
+        if raw is None:
+            break
         try:
-            val = json.loads(raw)
+            arr = json.loads(raw)
         except json.JSONDecodeError:
+            search_from = start_bracket + 1
             continue
-        out.setdefault(key, val)
+        for entry in arr:
+            if not isinstance(entry, dict):
+                continue
+            key = entry.get("key")
+            value = entry.get("value")
+            if isinstance(key, str) and isinstance(value, str):
+                cleaned = _clean_metafield_text(value)
+                if cleaned and (key not in out or len(cleaned) > len(out[key])):
+                    out[key] = cleaned
+        search_from = start_bracket + len(raw)
     return out
