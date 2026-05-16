@@ -69,3 +69,29 @@ python -m uv run uvicorn webhook:app --host 0.0.0.0 --port 8000
 python -m uv run python -m evals.runner
 ```
 Reads `evals/golden.jsonl` (9 cases, one per tool dimension), persists to the `eval_runs` SQLite table, exits non-zero on any failure.
+
+## Examples
+
+See `examples/` for annotated walkthroughs of the seven core tool paths:
+
+| File | Prompt | Tools fired |
+|------|--------|-------------|
+| `01-ingredient-check.md` | "Does this have sodium?" | `check_field` |
+| `02-full-evaluation.md` | "Evaluate this listing" | `evaluate_listing_quality`, `benchmark_against_category`, `cluster_review_themes` |
+| `03-image-score.md` | "How good are the product images?" | `score_images` |
+| `04-rewrite.md` | "Draft a better product description" | `draft_rewrite`, `enqueue_hitl` |
+| `05-compare.md` | "Compare LMNT vs Humantra electrolytes" | `compare_products` |
+| `06-consistency.md` | "Are the claims consistent across the listing?" | `check_consistency` |
+| `07-review-themes.md` | "What do customers love and hate?" | `cluster_review_themes`, `fetch_reviews_full` |
+
+## Roadmap
+
+This MVP demonstrates the core Navigate / Ingest / Evaluate / Act loop. The natural next milestones for a production AI Transformation Team:
+
+| Month | Milestone |
+|-------|-----------|
+| 1 | **Catalog audit bot** — scheduled n8n workflow scans all product pages nightly, flags newly incomplete listings, posts digest to Slack |
+| 2 | **Rewrite bot** — auto-drafts copy improvements for flagged listings, queues for human approval via the HITL interface |
+| 3 | **SEO + completeness bot** — benchmarks each listing against top-ranked competitors, generates structured completeness scores and keyword gap reports |
+
+Beyond month 3: brand onboarding assistant, cross-category comparison agent, review-insight digest, image quality monitor.

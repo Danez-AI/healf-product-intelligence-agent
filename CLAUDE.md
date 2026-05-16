@@ -149,7 +149,18 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 | 12 — MCP server | `mcp_server.py` | ✅ Complete — 3 new tests |
 | 13 — n8n webhook | `webhook.py`, `n8n/healf-catalog-audit.json` | ✅ Complete — 3 new tests; tagged `wave-13-complete` |
 
-**Tier 4 (Polish) — Wave 14 — Planned**
+**Tier 4 (Polish) — Wave 14 — ✅ COMPLETE** — tagged `wave-14-final` — 57 tests passing
+
+| Task | Files | Status |
+|------|-------|--------|
+| README rewrite | `README.md` | ✅ Status banner, arch diagram, Quick Start, env vars table |
+| Eval filter fix (G-20) | `evals/runner.py`, `tests/test_evals.py` | ✅ Exact comma-separated match; regression test |
+| fastmcp dep fix (G-21) | `pyproject.toml`, `uv.lock` | ✅ `fastmcp-slim[server]>=3.3.0` |
+| Submission checklist | `docs/submission-checklist.md` | ✅ New file |
+| Gotchas update | `docs/gotchas.md` | ✅ G-20 resolved, G-21 added |
+| examples/ (7 demo runs) | `examples/01–07.md` | ✅ All 7 tool paths covered |
+| README 3-month roadmap | `README.md` | ✅ Examples table + Roadmap section added |
+| docs/decisions.md ADRs | `docs/decisions.md` | ✅ 5 ADRs: SQLite, fastmcp, JSON-LD, 3 surfaces, tool-use loop |
 
 ## Key Decisions
 
