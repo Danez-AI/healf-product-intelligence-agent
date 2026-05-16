@@ -317,3 +317,15 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 **Fix:** Added `_split_ingredient_blob_by_flavour(blob) -> dict[str, list[str]]` in `healf_agent/tools/ingest.py`. `load_full_product` now populates `Product.ingredients_by_flavour` when headers are detected. `check_field` enriches ingredient answers with `per_flavour: [...]` and `all_flavours: [...]` so the agent can say "malic acid is only in Watermelon — the other three flavours use citric acid."  
 **Backward compat:** `Product.ingredients` (flat deduplicated list) is unchanged — all existing tools (eval, consistency, draft, compare) continue to work.  
 **Added:** 2026-05-16 Session 14 — Wave 17.
+
+---
+
+## G-32: Healf benefit prose is split across RSC Flight HTML and metafields — none of it reached the agent
+
+**Symptom:** Agent answered "What are the health benefits?" with "The claims field on the Healf listing is currently empty — I'd recommend a manual check on the live Healf page." The page clearly states EFSA-style benefits ("Contributes to electrolyte balance", "Helps reduce tiredness and fatigue") and has a suggested-use section.  
+**Root cause (3 parts):**  
+1. `<div class="old-description">` with the benefit bullets lives inside the RSC Flight payload as an escaped HTML string (`__next_f.push([1, "\\u003cdiv class=\\"old-description\\"..."])`). Parsing the raw page DOM with selectolax doesn't find it — selectolax sees a `<script>` tag, not a `<div>`. Must parse the decoded RSC flight text instead.  
+2. `raw_metafields["why_its_healf"]` is `"$24"` on the LMNT product — an unresolved RSC Flight pointer (reference to another server-component chunk), not real text. Passing it to the agent produces gibberish.  
+3. `raw_metafields["suggested_use"]` was extracted correctly but never surfaced — not in `product_ctx`, not in any tool output.  
+**Fix:** `_extract_descriptive_text(html, meta)` in `healf_agent/tools/ingest.py` — decodes RSC flight text, parses it with selectolax to find `div.old-description`, appends real metafield values (`why_its_healf`, `suggested_use`) after filtering RSC pointer values (regex `^\$\d+$`). Result stored in `Product.page_text`. `app.py` injects `page_text` into the per-turn agent context between `--- Page description text ---` delimiters.  
+**Added:** 2026-05-16 Session 14 — Wave 18.
