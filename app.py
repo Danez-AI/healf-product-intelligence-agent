@@ -60,6 +60,8 @@ def chat_page() -> None:
     user_input = st.chat_input("Ask the agent...")
     if user_input:
         st.session_state["messages"].append({"role": "user", "text": user_input})
+        with st.chat_message("user"):
+            st.markdown(user_input)
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -87,8 +89,9 @@ def chat_page() -> None:
                     product=product,
                 )
                 st.markdown(answer)
-                with st.expander("tool trace"):
-                    st.json(trace)
+                if trace:
+                    with st.expander("tool trace"):
+                        st.json(trace)
         st.session_state["messages"].append({"role": "assistant", "text": answer, "trace": trace})
 
 
