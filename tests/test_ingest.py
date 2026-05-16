@@ -10,6 +10,8 @@ from healf_agent.tools.ingest import (
     _split_ingredient_blob_by_flavour,
     _extract_descriptive_text,
     _extract_variant_base_image_urls,
+    _claims_from_old_description,
+    _RSC_PTR_RE,
 )
 
 
@@ -194,3 +196,44 @@ def test_image_dedup_preserves_order(monkeypatch) -> None:
     urls = [str(img.url) for img in product.images]
     # No duplicates
     assert len(urls) == len(set(urls)), f"Duplicate image URLs found: {urls}"
+
+
+def test_rsc_ptr_re_matches_hex_and_decimal() -> None:
+    import re
+    from healf_agent.tools.ingest import _RSC_PTR_RE
+    # Decimal RSC pointer (e.g. "$24")
+    assert _RSC_PTR_RE.match("$24"), "$24 must match"
+    assert _RSC_PTR_RE.match("$0"), "$0 must match"
+    # Hex RSC pointer (e.g. "$1e") — the bug that was missing
+    assert _RSC_PTR_RE.match("$1e"), "$1e must match"
+    assert _RSC_PTR_RE.match("$1E"), "$1E must match (case-insensitive)"
+    assert _RSC_PTR_RE.match("$ff"), "$ff must match"
+    # Non-pointers must NOT match
+    assert not _RSC_PTR_RE.match("text"), "'text' must not match"
+    assert not _RSC_PTR_RE.match("$"), "bare '$' must not match"
+    assert not _RSC_PTR_RE.match("$1 extra"), "'$1 extra' must not match"
+
+
+def test_claims_no_rsc_pointers_lmnt(monkeypatch) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    import healf_agent.tools.navigate as _nav
+    monkeypatch.setattr(_nav, "fetch_product_page", lambda url: html)
+    product = load_full_product("https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack")
+    import re
+    ptr_pattern = re.compile(r"^\$[0-9a-f]+$", re.IGNORECASE)
+    for claim in (product.claims or []):
+        assert not ptr_pattern.match(claim), f"RSC pointer leaked into claims: {claim!r}"
+
+
+def test_claims_extracted_from_old_description_lmnt(monkeypatch) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    import healf_agent.tools.navigate as _nav
+    monkeypatch.setattr(_nav, "fetch_product_page", lambda url: html)
+    product = load_full_product("https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack")
+    assert product.claims and len(product.claims) >= 2, (
+        f"Expected >=2 claims from old-description; got: {product.claims}"
+    )
+    all_claims_text = " ".join(product.claims).lower()
+    assert any(kw in all_claims_text for kw in ["magnesium", "tiredness", "electrolyte", "sodium"]), (
+        f"Expected at least one EFSA-style claim keyword; got: {product.claims}"
+    )

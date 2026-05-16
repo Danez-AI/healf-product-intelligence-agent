@@ -188,8 +188,9 @@ _METAFIELD_ANCHOR = '"metafields":['
 _BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _TAG_RE = re.compile(r"<[^>]+>")
 _FLAVOUR_HEADER_RE = re.compile(r"^[A-Z][A-Za-z0-9 &\-/]{1,40}:\s*$")
-# RSC Flight pointers look like "$24" — they are unresolved React server component refs.
-_RSC_PTR_RE = re.compile(r"^\$\d+$")
+# RSC Flight pointers look like "$24" or "$1e" — they are unresolved React server component refs.
+# Indices may be decimal or hex (e.g. $1e uses the hex digit 'e').
+_RSC_PTR_RE = re.compile(r"^\$[0-9a-f]+$", re.IGNORECASE)
 
 
 def _extract_descriptive_text(html: str, meta: dict[str, str]) -> str:
@@ -238,6 +239,28 @@ def _extract_descriptive_text(html: str, meta: dict[str, str]) -> str:
         sections.append("## Suggested Use\n" + use)
 
     return "\n\n".join(sections)
+
+
+def _claims_from_old_description(html: str) -> list[str]:
+    """Extract claim bullets from <div class='old-description'> in the RSC flight.
+
+    Returns up to 10 non-empty <li> texts that are not RSC pointers.
+    Returns [] if the div is not found or has no valid <li> items.
+    """
+    flight = extract_rsc_flight(html)
+    parse_source = flight if flight else html
+    tree = HTMLParser(parse_source)
+    desc_node = tree.css_first("div.old-description")
+    if not desc_node:
+        return []
+    claims: list[str] = []
+    for li in desc_node.css("li"):
+        text = (li.text() or "").strip()
+        # Strip leading bullet characters
+        text = text.lstrip("•–-· ").strip()
+        if text and not _RSC_PTR_RE.match(text):
+            claims.append(text)
+    return claims[:10]
 
 
 def _clean_metafield_text(raw: str) -> str:
@@ -417,7 +440,12 @@ def load_full_product(url: str) -> Product:
     if page_text:
         updates["page_text"] = page_text
     if not p.claims:
-        claims_blob = meta.get("claims") or meta.get("why_its_healf")
-        if claims_blob:
-            updates["claims"] = [c.strip() for c in claims_blob.split("\n") if c.strip()][:10]
+        claims_primary = _claims_from_old_description(html_text)
+        if claims_primary:
+            updates["claims"] = claims_primary
+        else:
+            claims_blob = meta.get("claims") or meta.get("why_its_healf")
+            if claims_blob and not _RSC_PTR_RE.match(claims_blob.strip()):
+                candidates = [c.strip() for c in claims_blob.split("\n") if c.strip()]
+                updates["claims"] = [c for c in candidates if not _RSC_PTR_RE.match(c)][:10]
     return p.model_copy(update=updates)
