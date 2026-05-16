@@ -60,6 +60,24 @@ CREATE TABLE IF NOT EXISTS eval_runs (
     detail TEXT NOT NULL,
     created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    product_handle TEXT,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    trace_json TEXT,
+    debug_json TEXT,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at);
 """
 
 
@@ -231,3 +249,86 @@ class Storage:
         self.conn.commit()
         if cursor.rowcount == 0:
             raise KeyError(f"No HITL entry with id={hitl_id}")
+
+    # ---- chat sessions ----
+
+    def create_chat_session(self, title: str, product_handle: str | None = None) -> int:
+        now = time.time()
+        cursor = self.conn.execute(
+            "INSERT INTO chat_sessions(title, product_handle, created_at, updated_at) VALUES(?,?,?,?)",
+            (title, product_handle, now, now),
+        )
+        self.conn.commit()
+        return cursor.lastrowid  # type: ignore[return-value]
+
+    def list_recent_sessions(self, limit: int = 5) -> list[dict]:
+        rows = self.conn.execute(
+            """
+            SELECT s.id, s.title, s.product_handle, s.updated_at,
+                   COUNT(m.id) AS message_count
+            FROM chat_sessions s
+            LEFT JOIN chat_messages m ON m.session_id = s.id
+            GROUP BY s.id
+            ORDER BY s.updated_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_session_messages(self, session_id: int) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT role, text, trace_json, debug_json, created_at "
+            "FROM chat_messages WHERE session_id=? ORDER BY created_at",
+            (session_id,),
+        ).fetchall()
+        result = []
+        for r in rows:
+            entry: dict = {"role": r["role"], "text": r["text"]}
+            if r["trace_json"]:
+                entry["trace"] = json.loads(r["trace_json"])
+            if r["debug_json"]:
+                entry["debug"] = json.loads(r["debug_json"])
+            result.append(entry)
+        return result
+
+    def append_chat_message(
+        self,
+        session_id: int,
+        role: str,
+        text: str,
+        trace: dict | None = None,
+        debug: dict | None = None,
+    ) -> None:
+        now = time.time()
+        self.conn.execute(
+            "INSERT INTO chat_messages(session_id, role, text, trace_json, debug_json, created_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (
+                session_id,
+                role,
+                text,
+                json.dumps(trace) if trace is not None else None,
+                json.dumps(debug) if debug is not None else None,
+                now,
+            ),
+        )
+        self.conn.execute(
+            "UPDATE chat_sessions SET updated_at=? WHERE id=?",
+            (now, session_id),
+        )
+        self.conn.commit()
+
+    def update_session_title(self, session_id: int, title: str) -> None:
+        self.conn.execute(
+            "UPDATE chat_sessions SET title=? WHERE id=?",
+            (title, session_id),
+        )
+        self.conn.commit()
+
+    def update_session_product(self, session_id: int, product_handle: str | None) -> None:
+        self.conn.execute(
+            "UPDATE chat_sessions SET product_handle=? WHERE id=?",
+            (product_handle, session_id),
+        )
+        self.conn.commit()

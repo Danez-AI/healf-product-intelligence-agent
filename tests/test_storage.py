@@ -123,3 +123,47 @@ def test_update_hitl_edit_overwrites_drafted_description(storage: Storage) -> No
     assert entry.drafted_description == "Revised copy"
     assert entry.status == "edited"
     assert entry.reviewed_at is not None
+
+
+# ---- chat session CRUD tests ----
+
+def test_create_and_list_chat_sessions(storage: Storage) -> None:
+    id1 = storage.create_chat_session("Session one", product_handle="lmnt")
+    id2 = storage.create_chat_session("Session two")
+    sessions = storage.list_recent_sessions(5)
+    assert len(sessions) == 2
+    # Most recent (id2) should be first
+    assert sessions[0]["id"] == id2
+    assert sessions[1]["id"] == id1
+    assert sessions[1]["product_handle"] == "lmnt"
+
+
+def test_append_chat_message_persists_and_bumps_updated_at(storage: Storage) -> None:
+    sid = storage.create_chat_session("Test chat")
+    # Grab the initial updated_at
+    initial_updated = storage.conn.execute(
+        "SELECT updated_at FROM chat_sessions WHERE id=?", (sid,)
+    ).fetchone()["updated_at"]
+
+    import time; time.sleep(0.01)
+    storage.append_chat_message(sid, "user", "Hello agent")
+    storage.append_chat_message(sid, "assistant", "Hello!", trace={"tool": "none"}, debug={"system": "sys"})
+
+    msgs = storage.get_session_messages(sid)
+    assert len(msgs) == 2
+    assert msgs[0]["role"] == "user"
+    assert msgs[0]["text"] == "Hello agent"
+    assert msgs[1]["trace"] == {"tool": "none"}
+    assert msgs[1]["debug"] == {"system": "sys"}
+
+    new_updated = storage.conn.execute(
+        "SELECT updated_at FROM chat_sessions WHERE id=?", (sid,)
+    ).fetchone()["updated_at"]
+    assert new_updated > initial_updated
+
+
+def test_update_session_title(storage: Storage) -> None:
+    sid = storage.create_chat_session("New conversation")
+    storage.update_session_title(sid, "LMNT claims audit")
+    sessions = storage.list_recent_sessions(1)
+    assert sessions[0]["title"] == "LMNT claims audit"
