@@ -195,7 +195,17 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 1. Rename the LLM-rubric case to `eval-010` (two-digit suffix breaks the substring overlap).  
 2. Use a more specific filter prefix, e.g. `--filter eval-00` won't work; instead filter on the tool name or add a `"tags"` field to golden.jsonl and filter on that.  
 3. Change the runner's `--filter` to support a regex or a comma-separated list of IDs.  
-**Current workaround:** Accept that eval-009 runs during `--filter eval-00` smoke tests; it will always score 0.0 when `ANTHROPIC_API_KEY` is absent, which is a known-acceptable failure.  
-**Applies to:** `evals/runner.py` (`--filter` flag), `evals/golden.jsonl` (ID naming scheme)
+**Fix applied (2026-05-16):** Changed `--filter` from substring match to **comma-separated exact-ID match**. `--filter eval-001` now matches only `eval-001`. `--filter eval-001,eval-002` matches both. Regression test `test_filter_exact_match_excludes_eval_009` added.  
+**Applies to:** `evals/runner.py` (`--filter` flag)
+
+---
+
+## G-21: `fastmcp-slim` requires `[server]` extra for `from fastmcp import FastMCP`
+
+**Symptom:** After changing `pyproject.toml` to use `fastmcp-slim` (without extras), `uv sync` installs the slim package but `from fastmcp import FastMCP` raises `ImportError: FastMCP server support is not installed. Install fastmcp or fastmcp-slim[server]`.  
+**Root cause:** `fastmcp-slim` splits server and client functionality into optional extras. The bare `fastmcp-slim` package installs only the core; the `[server]` extra pulls in `sse-starlette`, `uvicorn`, and related deps required for `FastMCP`.  
+**Fix:** Use `fastmcp-slim[server]>=3.3.0` in `pyproject.toml`. This is the correct dependency for `mcp_server.py` which uses `FastMCP` from the server module.  
+**Note:** The original `fastmcp>=0.2.0` constraint was satisfied by `fastmcp-slim 3.3.0` (with server support pre-included) because the slim package provides the `fastmcp` namespace. A tighter `<0.3.0` pin caused uv to install legacy `fastmcp 0.2.0` (a completely different package with no `__init__.py`) instead.  
+**Applies to:** `pyproject.toml`, `mcp_server.py`
 
 ---
