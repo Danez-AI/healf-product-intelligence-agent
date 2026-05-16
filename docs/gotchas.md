@@ -329,3 +329,55 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 3. `raw_metafields["suggested_use"]` was extracted correctly but never surfaced — not in `product_ctx`, not in any tool output.  
 **Fix:** `_extract_descriptive_text(html, meta)` in `healf_agent/tools/ingest.py` — decodes RSC flight text, parses it with selectolax to find `div.old-description`, appends real metafield values (`why_its_healf`, `suggested_use`) after filtering RSC pointer values (regex `^\$\d+$`). Result stored in `Product.page_text`. `app.py` injects `page_text` into the per-turn agent context between `--- Page description text ---` delimiters.  
 **Added:** 2026-05-16 Session 14 — Wave 18.
+
+---
+
+## G-33: Healf Shopify JSON endpoints all blocked (Wave 0 probe result)
+
+**Probe date:** 2026-05-16 Session 15  
+**URLs tested:**
+- `https://healf.com/products/lmnt-recharge-electrolytes-variety-pack.json` → 404 (HTML)
+- `https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack.json` → 200 but HTML content-type (Next.js renders the PDP, ignores `.json` suffix)
+- `https://healf.com/products/lmnt-recharge-electrolytes-variety-pack.js` → 404
+- `https://healf.com/products.json?limit=1` → 200 but HTML (same issue)
+
+**Conclusion:** Healf's Next.js App Router intercepts all these paths and returns HTML, not Shopify JSON. No canonical product JSON API is reachable publicly. (Previously noted as G-02 in general terms; this confirms with specific probes.)  
+**Impact on Wave A:** Image extraction must use RSC flight payload merge (variant_base_images metafield + Shopify CDN regex fallback) rather than the Shopify products JSON endpoint.  
+**Added:** 2026-05-16 Session 15 — Wave 0.
+
+---
+
+## G-34: `_RSC_PTR_RE` was digits-only — hex pointers like `$1e` slipped through (Wave B)
+
+**Symptom:** `Product.claims == ["$1e"]` — a raw RSC Flight chunk pointer appeared in agent output.  
+**Root cause:** `_RSC_PTR_RE = re.compile(r"^\$\d+$")` only matches decimal digit sequences. RSC pointers use hex chunk indices (`$1e`, `$2a`, etc.) — these contain letters a–f and were not matched.  
+**Fix:** Changed to `re.compile(r"^\$[0-9a-f]+$", re.IGNORECASE)` in `ingest.py`. The two existing call sites in `_extract_descriptive_text` and the new claims-extraction fallback all use this regex.  
+**Added:** 2026-05-16 Session 15 — Wave B.
+
+---
+
+## G-35: Image gallery lives in RSC `variant_base_images` metafield, not JSON-LD (Wave A)
+
+**Symptom:** `score_images` reported `image_count: 1` even though the live PDP shows 4 images.  
+**Root cause:** `_images_from_block` only read the JSON-LD `"image"` field, which Healf emits as a single scalar string (the hero). The remaining gallery images are stored in the `variant_base_images` RSC metafield as a JSON-encoded array: `[{"src":"https://cdn.shopify.com/...","altText":null}]`. `extract_metafields` was calling `_clean_metafield_text` on this value, which stripped the JSON structure entirely.  
+**Fix:** `_extract_variant_base_image_urls(flight_text)` parses `variant_base_images` as JSON (before text-cleaning). `_fallback_shopify_image_urls(flight_text)` regex-scans for any Shopify/Backblaze CDN URLs as a last resort. `load_full_product` merges all sources with order-preserving dedup into `Product.images`.  
+**Added:** 2026-05-16 Session 15 — Wave A.
+
+---
+
+## G-36: Vision OCR pass adds `on_pack_text` / `contains_nutrition_panel` — ~30% token bump (Wave C)
+
+**Context:** Serving sizes, electrolyte mg quantities, and nutrition panels are printed on product label images — the structured fields never contained them. The agent was falsely saying these details were "missing".  
+**Fix:** Extended `_VISION_PROMPT` to also request `on_pack_text` (verbatim label OCR) and `contains_nutrition_panel` (bool) per image. `score_images` now returns `aggregated_on_pack_text` and `any_nutrition_panel`. `SYSTEM_PROMPT` directs the agent to call `score_images` for serving size / nutrition questions.  
+**Cost:** ~30% more output tokens per `score_images` call (max 8 images → ~£0.001/call). OCR output is advisory — Gemini may miss text on blurry crops.  
+**Added:** 2026-05-16 Session 15 — Wave C.
+
+---
+
+## G-37: `run_agent_turn` now returns a 3-tuple — debug expanders in Streamlit (Wave D)
+
+**Change:** `run_agent_turn` signature changed from `(text, trace)` to `(text, trace, debug)`. The `debug` dict captures per-iteration: full messages snapshot, LLM response content, token usage (input/output/cache), stop_reason, model, latency_ms, request_id, system prompt, and injected product context.  
+**Callers updated:** `app.py` and `tests/test_agent.py` — both unpack the 3-tuple. No other callers exist.  
+**Streamlit:** Two new collapsed expanders on every agent reply: "debug — prompts & messages" (system prompt, injected context, per-iter messages/response) and "debug — usage & timing" (dataframe with token counts and latency). Historical messages also re-render these expanders.  
+**No disk persistence:** Debug data lives in `st.session_state` only (per user choice). Extend later via `agent_runs` table or JSONL if needed.  
+**Added:** 2026-05-16 Session 15 — Wave D.
