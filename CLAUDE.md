@@ -162,6 +162,20 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 | README 3-month roadmap | `README.md` | ✅ Examples table + Roadmap section added |
 | docs/decisions.md ADRs | `docs/decisions.md` | ✅ 5 ADRs: SQLite, fastmcp, JSON-LD, 3 surfaces, tool-use loop |
 
+**Post-submission bugfix (Session 9) — 2026-05-16**
+
+| Fix | Files | Status |
+|-----|-------|--------|
+| G-22: `fetch_product_page` UnboundLocalError in `dispatch_tool` | `healf_agent/tools/__init__.py` line 233 | ✅ Removed redundant local import |
+| G-23: Windows Firewall blocks port 8000 from n8n homeserver | `docs/n8n-setup.md` | ✅ Firewall rule added (Session 10) |
+| G-24: `uv --env-file` chokes on `HEALF_USER_AGENT` URL value | `.env` | ⚠️ Warning only — API keys still load |
+| G-25: Stale Python process holds port 8000 between sessions | kill PID via netstat | ✅ Documented |
+| G-26: n8n-mcp API tools unavailable — no `.mcp.json` for project | `C:\Users\Daran\AI\Healf AI Agent\.mcp.json` | ✅ Created (restart Claude Code to activate) |
+| G-27: Split In Batches v3 skips batch output in manual test mode | `n8n/healf-catalog-audit.json` | ✅ Removed from live workflow — URL List → POST /audit direct |
+| G-28: IF node errors with `caseSensitive` undefined when score is string-typed | n8n IF node — "Convert types where required" toggle | ✅ Enabled toggle; all 6 nodes green (Session 11) |
+
+**n8n end-to-end test status: COMPLETE ✅** — All 6 nodes green confirmed 2026-05-16 Session 11. Score 2 < 3 → true branch → Notify Slack (fails gracefully). Workflow versionId: `0292c2e7-78c0-42b9-9d35-6a2753456dc4`.
+
 ## Key Decisions
 
 - **Stack:** Python 3.11+ + Anthropic SDK + Pydantic v2 + SQLite (not PostgreSQL — ship corpus.sqlite in repo)

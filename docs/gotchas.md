@@ -209,3 +209,76 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 **Applies to:** `pyproject.toml`, `mcp_server.py`
 
 ---
+
+## G-22: `from ... import name` inside a function body makes `name` local for the WHOLE function
+
+**Symptom:** `cannot access local variable 'fetch_product_page' where it is not associated with a value` — raised on every call to the `fetch_product` branch of `dispatch_tool`, even though `fetch_product_page` is imported at module level.  
+**Root cause:** Python's scoping rule: if a name is assigned *anywhere* in a function (including via `from module import name`), Python treats it as local throughout the entire function. The `compare_products` branch at line 233 had a redundant `from healf_agent.tools.navigate import fetch_product_page` — this made `fetch_product_page` a local in `dispatch_tool`, shadowing the module-level import and causing `UnboundLocalError` at line 104.  
+**Fix:** Remove the redundant local import inside `compare_products` branch (`healf_agent/tools/__init__.py` line 233). Both `fetch_product_page` and `parse_product` were already imported at module level.  
+**Applies to:** `healf_agent/tools/__init__.py`
+
+---
+
+## G-23: n8n homeserver cannot reach Windows PC webhook on port 8000 — Windows Firewall blocks it
+
+**Symptom:** n8n workflow executions complete in ~150ms with "success" — POST /audit node silently fails, IF node never sees a `score` field, workflow takes false branch and ends. The `onError: continueRegularOutput` setting masks the failure.  
+**Root cause:** Windows Firewall blocks inbound TCP port 8000 from other LAN hosts. The webhook server at `192.168.0.179:8000` is unreachable from the n8n homeserver at `192.168.0.87`.  
+**Fix (requires admin):** `netsh advfirewall firewall add rule name="Healf Webhook 8000" dir=in action=allow protocol=TCP localport=8000`  
+**Applies to:** `docs/n8n-setup.md` (add as Step 0 prerequisite)
+
+---
+
+## G-24: `.env` line 5 (`HEALF_USER_AGENT`) causes `uv --env-file` parse warning
+
+**Symptom:** `python -m uv run --env-file .env uvicorn webhook:app` prints `warning: Failed to parse environment file '.env' at position 34: HealfProductIntelligenceAgent/0.1 (https://...)`. All API keys (lines 1–4) still load correctly.  
+**Root cause:** `HEALF_USER_AGENT` value contains a URL with `/` characters that uv's env-file parser chokes on.  
+**Status:** Warning only — no functional impact. API keys load fine.  
+**Fix (optional):** Quote the value in `.env`: `HEALF_USER_AGENT="HealfProductIntelligenceAgent/0.1 (https://...)"`.  
+**Applies to:** `.env`, any `python -m uv run --env-file .env` invocation
+
+---
+
+## G-25: Stale Python process holds port 8000 between sessions
+
+**Symptom:** Starting `uvicorn webhook:app --port 8000` fails with `[WinError 10048] only one usage of each socket address`.  
+**Root cause:** A previous uvicorn process was started in background and never killed when the session ended.  
+**Fix:** `netstat -ano | findstr ":8000" | findstr "LISTENING"` → get PID → `Stop-Process -Id <PID> -Force`.  
+**Applies to:** Any session that restarts the webhook server
+
+---
+
+## G-26: n8n-mcp MCP API tools unavailable — N8N_API_URL not configured for this project
+
+**Symptom:** `mcp__n8n-mcp__n8n_test_workflow`, `mcp__n8n-mcp__n8n_executions`, etc. not in available tools. Only the 7 "always available" tools show up (search_nodes, get_node, validate_node, validate_workflow, search_templates, get_template, tools_documentation).  
+**Root cause:** The Healf AI Agent project had no `.mcp.json`, so the n8n-mcp MCP server ran without `N8N_API_URL`/`N8N_API_KEY`.  
+**Fix:** Created `C:\Users\Daran\AI\Healf AI Agent\.mcp.json` with the same n8n-mcp config as `C:\Users\Daran\AI\Personal Trainer Agent\.mcp.json`. Restart Claude Code to load.  
+**Applies to:** All sessions in this project — must restart Claude Code once after `.mcp.json` creation
+
+---
+
+## G-27: Split In Batches v3 skips batch output in manual test mode
+
+**Symptom:** n8n workflow manual execution stops at Split In Batches (144ms total). `lastNodeExecuted: "Split In Batches"`. POST /audit never runs. Execution shows output 0 (batch) empty, output 1 (done) has the URL item.  
+**Root cause:** Split In Batches v3 in n8n manual test mode doesn't loop back — with 1 item and batchSize=1, it routes the item to the "done" output (1) rather than the "batch" output (0). This only affects manual/test execution; scheduled runs work correctly.  
+**Fix applied (2026-05-16):** Removed Split In Batches from the live n8n workflow via REST API. URL List now connects directly to POST /audit. New workflow versionId: `5e5ec0b4-16d9-4e98-bad1-9ed7c56b231e`.  
+**Applies to:** `n8n/healf-catalog-audit.json` (should be updated to match live workflow)
+
+---
+
+## G-24: `uv run --env-file .env` warns on HEALF_USER_AGENT line but still loads prior keys
+
+**Symptom:** `warning: Failed to parse environment file .env at position 34: HealfProductIntelligenceAgent/0.1 (https://...)` — uv chokes on the URL value containing `(` and `)`.  
+**Impact:** HEALF_USER_AGENT is not set; all API keys on lines 1–4 load fine.  
+**Fix options:** Quote the value in `.env` (`HEALF_USER_AGENT="..."`) or accept the warning (user-agent is optional, has a default).  
+**Applies to:** `.env`, `healf_agent/tools/navigate.py`
+
+---
+
+## G-28: n8n IF node errors with `Cannot read properties of undefined (reading 'caseSensitive')` when score is a string
+
+**Symptom:** Full workflow run — nodes 1–4 green, IF score < 3 shows red with error: `Cannot read properties of undefined (reading 'caseSensitive')`. The score value in the POST /audit HTTP response arrives as `"2"` (JSON number, but n8n treats it as string in some contexts).  
+**Root cause:** n8n IF node's numeric `is less than` operator internally calls a string-comparison method when type coercion is disabled and the left-hand value has an ambiguous type. n8n suggests enabling "Convert types where required" as the fix.  
+**Fix applied (2026-05-16 Session 11):** Enabled **Convert types where required** toggle in the IF score < 3 node Parameters tab. Workflow saved and republished. All 6 nodes now run green. New versionId: `0292c2e7-78c0-42b9-9d35-6a2753456dc4`.  
+**Applies to:** `n8n/healf-catalog-audit.json` — IF node, `convertTypesWhenComparing` must be `true`
+
+---

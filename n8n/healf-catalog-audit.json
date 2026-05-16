@@ -1,166 +1,481 @@
-{
-  "name": "Healf Catalog Audit",
-  "nodes": [
-    {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "0 9 * * *"
-            }
-          ]
-        }
-      },
-      "id": "1",
-      "name": "Schedule: Daily 09:00 UTC",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.3,
-      "position": [240, 300]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "a1b2c3d4-0001-0000-0000-000000000001",
-              "name": "webhookUrl",
-              "type": "string",
-              "value": "http://YOUR_WINDOWS_IP:8000"
-            },
-            {
-              "id": "a1b2c3d4-0001-0000-0000-000000000002",
-              "name": "slackUrl",
-              "type": "string",
-              "value": "https://hooks.slack.com/services/REPLACE_ME"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "7",
-      "name": "Config",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [460, 300]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Edit this list to add or remove product URLs to audit.\n// Each URL becomes one item processed one at a time.\nconst urls = [\n  'https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack'\n];\nreturn urls.map(url => ({ json: { url } }));"
-      },
-      "id": "2",
-      "name": "URL List",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [680, 300]
-    },
-    {
-      "parameters": {
-        "batchSize": 1,
-        "options": {}
-      },
-      "id": "3",
-      "name": "Split In Batches",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [900, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $('Config').first().json.webhookUrl }}/audit",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"url\": \"{{ $json.url }}\",\n  \"draft\": true\n}",
-        "options": {
-          "timeout": 120000
-        }
-      },
-      "id": "4",
-      "name": "POST /audit",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "onError": "continueRegularOutput",
-      "position": [1120, 300]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "conditions": [
-            {
-              "leftValue": "={{ $json.score }}",
-              "rightValue": 3,
-              "operator": {
-                "type": "number",
-                "operation": "lt"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "5",
-      "name": "IF score < 3",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [1340, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $('Config').first().json.slackUrl }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"text\": \":warning: Healf listing needs attention — *{{ $json.product_handle }}* scored {{ $json.score }}/5. Gaps: {{ $json.gaps.join(', ') }}. HITL queue id: {{ $json.hitl_id }}.\"\n}",
-        "options": {}
-      },
-      "id": "6",
-      "name": "Notify Slack",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "onError": "continueRegularOutput",
-      "position": [1560, 200]
-    }
-  ],
-  "connections": {
-    "Schedule: Daily 09:00 UTC": {
-      "main": [
-        [{"node": "Config", "type": "main", "index": 0}]
-      ]
-    },
-    "Config": {
-      "main": [
-        [{"node": "URL List", "type": "main", "index": 0}]
-      ]
-    },
-    "URL List": {
-      "main": [
-        [{"node": "Split In Batches", "type": "main", "index": 0}]
-      ]
-    },
-    "Split In Batches": {
-      "main": [
-        [{"node": "POST /audit", "type": "main", "index": 0}]
-      ]
-    },
-    "POST /audit": {
-      "main": [
-        [{"node": "IF score < 3", "type": "main", "index": 0}]
-      ]
-    },
-    "IF score < 3": {
-      "main": [
-        [{"node": "Notify Slack", "type": "main", "index": 0}],
-        []
-      ]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "pinData": {},
-  "active": false,
-  "versionId": "3"
+﻿{
+    "updatedAt":  "2026-05-16T09:21:11.811Z",
+    "createdAt":  "2026-05-16T05:45:39.761Z",
+    "id":  "U1vvBBOnlHYAH2L7",
+    "name":  "Healf Catalog Audit",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "rule":  {
+                                                      "interval":  [
+                                                                       {
+                                                                           "field":  "cronExpression",
+                                                                           "expression":  "0 9 * * *"
+                                                                       }
+                                                                   ]
+                                                  }
+                                     },
+                      "id":  "d289e30a-67fb-4a8a-b7c6-501681478fc6",
+                      "name":  "Schedule: Daily 09:00 UTC",
+                      "type":  "n8n-nodes-base.scheduleTrigger",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       -1824,
+                                       -32
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "assignments":  {
+                                                             "assignments":  [
+                                                                                 {
+                                                                                     "id":  "a1",
+                                                                                     "name":  "webhookUrl",
+                                                                                     "type":  "string",
+                                                                                     "value":  "http://192.168.0.179:8000"
+                                                                                 },
+                                                                                 {
+                                                                                     "id":  "a2",
+                                                                                     "name":  "slackUrl",
+                                                                                     "type":  "string",
+                                                                                     "value":  "https://hooks.slack.com/services/REPLACE_ME"
+                                                                                 }
+                                                                             ]
+                                                         },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "c58f728c-c522-42f7-a5e1-3c9950dfcd63",
+                      "name":  "Config",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       -1600,
+                                       -32
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const urls = [\n  \u0027https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack\u0027\n];\nreturn urls.map(url =\u003e ({ json: { url } }));"
+                                     },
+                      "id":  "b23d94bc-ed46-48c3-94e8-1a9bf976a09d",
+                      "name":  "URL List",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -1376,
+                                       -32
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "={{ $(\u0027Config\u0027).first().json.webhookUrl }}/audit",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={\n  \"url\": \"{{ $json.url }}\",\n  \"draft\": true\n}",
+                                         "options":  {
+                                                         "timeout":  120000
+                                                     }
+                                     },
+                      "id":  "9b70b6ea-4f8e-4cc0-8dd7-a857fbc045e3",
+                      "name":  "POST /audit",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       -928,
+                                       -48
+                                   ],
+                      "onError":  "continueRegularOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "loose",
+                                                                            "version":  3
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "leftValue":  "={{ $json.score }}",
+                                                                                   "rightValue":  3,
+                                                                                   "operator":  {
+                                                                                                    "type":  "number",
+                                                                                                    "operation":  "lt"
+                                                                                                },
+                                                                                   "id":  "6c6471af-a3fe-4c72-9313-3e8eb1b45af8"
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "looseTypeValidation":  true,
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "1917a0fa-01f1-4533-8675-9bda5ee9c4aa",
+                      "name":  "IF score \u003c 3",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.3,
+                      "position":  [
+                                       -720,
+                                       -32
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "={{ $(\u0027Config\u0027).first().json.slackUrl }}",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={\"text\": \":warning: Healf listing needs attention\"}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "cbcedbf8-2b3b-42ab-8030-6bb30fed0ab9",
+                      "name":  "Notify Slack",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       -496,
+                                       -128
+                                   ],
+                      "onError":  "continueRegularOutput"
+                  }
+              ],
+    "connections":  {
+                        "Schedule: Daily 09:00 UTC":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Config",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Config":  {
+                                       "main":  [
+                                                    [
+                                                        {
+                                                            "node":  "URL List",
+                                                            "type":  "main",
+                                                            "index":  0
+                                                        }
+                                                    ]
+                                                ]
+                                   },
+                        "URL List":  {
+                                         "main":  [
+                                                      [
+                                                          {
+                                                              "node":  "POST /audit",
+                                                              "type":  "main",
+                                                              "index":  0
+                                                          }
+                                                      ]
+                                                  ]
+                                     },
+                        "POST /audit":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "IF score \u003c 3",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "IF score \u003c 3":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Notify Slack",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ],
+                                                               [
+
+                                                               ]
+                                                           ]
+                                              }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "binaryMode":  "separate",
+                     "callerPolicy":  "workflowsFromSameOwner",
+                     "availableInMCP":  false
+                 },
+    "staticData":  {
+                       "node:Schedule: Daily 09:00 UTC":  {
+                                                              "recurrenceRules":  [
+
+                                                                                  ]
+                                                          }
+                   },
+    "meta":  null,
+    "pinData":  {
+
+                },
+    "versionId":  "0292c2e7-78c0-42b9-9d35-6a2753456dc4",
+    "activeVersionId":  "5e5ec0b4-16d9-4e98-bad1-9ed7c56b231e",
+    "versionCounter":  20,
+    "triggerCount":  1,
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-05-16T05:45:39.765Z",
+                       "createdAt":  "2026-05-16T05:45:39.765Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "U1vvBBOnlHYAH2L7",
+                       "projectId":  "pCzzB6TFl2i0YZEs",
+                       "project":  {
+                                       "updatedAt":  "2025-12-23T18:08:27.537Z",
+                                       "createdAt":  "2025-12-12T09:41:37.101Z",
+                                       "id":  "pCzzB6TFl2i0YZEs",
+                                       "name":  "Daran Menezes \u003cdaranmenezes.ai@gmail.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "creatorId":  "8b5ad01a-81ad-4411-b9f8-a5e18789f66d"
+                                   }
+                   }
+               ],
+    "tags":  [
+
+             ],
+    "activeVersion":  {
+                          "updatedAt":  "2026-05-16T08:31:45.162Z",
+                          "createdAt":  "2026-05-16T08:31:45.162Z",
+                          "versionId":  "5e5ec0b4-16d9-4e98-bad1-9ed7c56b231e",
+                          "workflowId":  "U1vvBBOnlHYAH2L7",
+                          "nodes":  [
+                                        {
+                                            "parameters":  {
+                                                               "rule":  {
+                                                                            "interval":  [
+                                                                                             {
+                                                                                                 "field":  "cronExpression",
+                                                                                                 "expression":  "0 9 * * *"
+                                                                                             }
+                                                                                         ]
+                                                                        }
+                                                           },
+                                            "id":  "d289e30a-67fb-4a8a-b7c6-501681478fc6",
+                                            "name":  "Schedule: Daily 09:00 UTC",
+                                            "type":  "n8n-nodes-base.scheduleTrigger",
+                                            "typeVersion":  1.3,
+                                            "position":  [
+                                                             -1824,
+                                                             -32
+                                                         ]
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "assignments":  {
+                                                                                   "assignments":  [
+                                                                                                       {
+                                                                                                           "id":  "a1",
+                                                                                                           "name":  "webhookUrl",
+                                                                                                           "type":  "string",
+                                                                                                           "value":  "http://192.168.0.179:8000"
+                                                                                                       },
+                                                                                                       {
+                                                                                                           "id":  "a2",
+                                                                                                           "name":  "slackUrl",
+                                                                                                           "type":  "string",
+                                                                                                           "value":  "https://hooks.slack.com/services/REPLACE_ME"
+                                                                                                       }
+                                                                                                   ]
+                                                                               },
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "id":  "c58f728c-c522-42f7-a5e1-3c9950dfcd63",
+                                            "name":  "Config",
+                                            "type":  "n8n-nodes-base.set",
+                                            "typeVersion":  3.4,
+                                            "position":  [
+                                                             -1600,
+                                                             -32
+                                                         ]
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "const urls = [\n  \u0027https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack\u0027\n];\nreturn urls.map(url =\u003e ({ json: { url } }));"
+                                                           },
+                                            "id":  "b23d94bc-ed46-48c3-94e8-1a9bf976a09d",
+                                            "name":  "URL List",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             -1376,
+                                                             -32
+                                                         ]
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "={{ $(\u0027Config\u0027).first().json.webhookUrl }}/audit",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={\n  \"url\": \"{{ $json.url }}\",\n  \"draft\": true\n}",
+                                                               "options":  {
+                                                                               "timeout":  120000
+                                                                           }
+                                                           },
+                                            "id":  "9b70b6ea-4f8e-4cc0-8dd7-a857fbc045e3",
+                                            "name":  "POST /audit",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.4,
+                                            "onError":  "continueRegularOutput",
+                                            "position":  [
+                                                             -928,
+                                                             -48
+                                                         ]
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "conditions":  {
+                                                                                  "conditions":  [
+                                                                                                     {
+                                                                                                         "leftValue":  "={{ $json.score }}",
+                                                                                                         "rightValue":  3,
+                                                                                                         "operator":  {
+                                                                                                                          "type":  "number",
+                                                                                                                          "operation":  "lt"
+                                                                                                                      }
+                                                                                                     }
+                                                                                                 ],
+                                                                                  "combinator":  "and"
+                                                                              },
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "id":  "1917a0fa-01f1-4533-8675-9bda5ee9c4aa",
+                                            "name":  "IF score \u003c 3",
+                                            "type":  "n8n-nodes-base.if",
+                                            "typeVersion":  2.3,
+                                            "position":  [
+                                                             -720,
+                                                             -32
+                                                         ]
+                                        },
+                                        {
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "={{ $(\u0027Config\u0027).first().json.slackUrl }}",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={\"text\": \":warning: Healf listing needs attention\"}",
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "id":  "cbcedbf8-2b3b-42ab-8030-6bb30fed0ab9",
+                                            "name":  "Notify Slack",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.4,
+                                            "onError":  "continueRegularOutput",
+                                            "position":  [
+                                                             -496,
+                                                             -128
+                                                         ]
+                                        }
+                                    ],
+                          "connections":  {
+                                              "Schedule: Daily 09:00 UTC":  {
+                                                                                "main":  [
+                                                                                             [
+                                                                                                 {
+                                                                                                     "node":  "Config",
+                                                                                                     "type":  "main",
+                                                                                                     "index":  0
+                                                                                                 }
+                                                                                             ]
+                                                                                         ]
+                                                                            },
+                                              "Config":  {
+                                                             "main":  [
+                                                                          [
+                                                                              {
+                                                                                  "node":  "URL List",
+                                                                                  "type":  "main",
+                                                                                  "index":  0
+                                                                              }
+                                                                          ]
+                                                                      ]
+                                                         },
+                                              "URL List":  {
+                                                               "main":  [
+                                                                            [
+                                                                                {
+                                                                                    "node":  "POST /audit",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ]
+                                                                        ]
+                                                           },
+                                              "POST /audit":  {
+                                                                  "main":  [
+                                                                               [
+                                                                                   {
+                                                                                       "node":  "IF score \u003c 3",
+                                                                                       "type":  "main",
+                                                                                       "index":  0
+                                                                                   }
+                                                                               ]
+                                                                           ]
+                                                              },
+                                              "IF score \u003c 3":  {
+                                                                        "main":  [
+                                                                                     [
+                                                                                         {
+                                                                                             "node":  "Notify Slack",
+                                                                                             "type":  "main",
+                                                                                             "index":  0
+                                                                                         }
+                                                                                     ],
+                                                                                     [
+
+                                                                                     ]
+                                                                                 ]
+                                                                    }
+                                          },
+                          "authors":  "Daran Menezes",
+                          "name":  null,
+                          "description":  null,
+                          "autosaved":  false,
+                          "workflowPublishHistory":  [
+                                                         {
+                                                             "createdAt":  "2026-05-16T08:31:45.504Z",
+                                                             "id":  441,
+                                                             "workflowId":  "U1vvBBOnlHYAH2L7",
+                                                             "versionId":  "5e5ec0b4-16d9-4e98-bad1-9ed7c56b231e",
+                                                             "event":  "activated",
+                                                             "userId":  "8b5ad01a-81ad-4411-b9f8-a5e18789f66d"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-05-16T08:31:45.390Z",
+                                                             "id":  440,
+                                                             "workflowId":  "U1vvBBOnlHYAH2L7",
+                                                             "versionId":  "5e5ec0b4-16d9-4e98-bad1-9ed7c56b231e",
+                                                             "event":  "deactivated",
+                                                             "userId":  "8b5ad01a-81ad-4411-b9f8-a5e18789f66d"
+                                                         }
+                                                     ]
+                      }
 }
