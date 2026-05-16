@@ -11,3 +11,7 @@ tests/fixtures/*.html
 .streamlit/secrets.toml
 evals/results/*.jsonl
 !evals/results/.gitkeep
+.playwright-cli/
+.playwright-mcp/
+playwright-headed.json
+*.png
