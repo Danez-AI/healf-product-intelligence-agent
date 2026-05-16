@@ -1,21 +1,30 @@
 # Example 1 — Ingredient Check
 
-**Product loaded:** LMNT Recharge Electrolytes Variety Pack
+**Product loaded:** Recharge Electrolytes - Variety Pack
 **URL:** `https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack`
 
 **Prompt:** "Does this have sodium?"
 
 ## Tool trace
 
-1. → `check_field(field="ingredients", query="sodium")` → field present; value: `"Sodium (1000mg), Potassium (200mg), Magnesium (60mg)"`; match found at position 0
+_No tools called._
 
 ## Agent response
 
-Yes — LMNT Recharge Electrolytes contains **sodium at 1,000 mg per serving**, which is the dominant electrolyte in the formula.
+Yes! **Sodium** is right there in the ingredients list as **Salt (Sodium Chloride)** — it's the very first ingredient, meaning it's present in the highest quantity by weight.
 
-This is intentionally high. LMNT's formulation philosophy (backed by their published research references) targets the sodium range lost through sweat during moderate-to-intense exercise, which most sports drinks undershoot. The 1,000 mg figure is roughly 43% of the UK Reference Nutrient Intake for sodium per day.
+The product description also highlights sodium as one of the three key electrolytes in the formula:
 
-If you are monitoring sodium for dietary or medical reasons, this is worth noting — one stick pack is a meaningful contribution to daily intake.
+> *"With a precise blend of **sodium**, magnesium, and potassium, this mix helps replenish essential minerals lost through exercise, busy days, or simply enjoying life."*
+
+So sodium is a core part of what LMNT Recharge is designed to deliver. If you'd like to know the exact mg amount per sachet, I can check the product label via image analysis — just say the word!
+
+## Run metadata
+
+- Iterations: 1
+- Total latency: 4,807 ms
+- Tokens: 1,023 input / 158 output (cache_read: 0)
+- Model: claude-sonnet-4-6
 
 ---
-*Tools used: `check_field` · Surface: Streamlit chat*
+*Tools used: _none_ · Surface: Streamlit chat*
