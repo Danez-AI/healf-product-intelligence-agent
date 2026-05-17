@@ -91,20 +91,22 @@ healf_agent/
     ├── consistency.py   ✅ Done — check_consistency (Wave 8)
     ├── evaluate.py      ✅ Done — evaluate_listing_quality (Wave 7)
     ├── act.py           ✅ Done — draft_rewrite + enqueue_hitl (Wave 9)
-    └── compare.py       ✅ Done — compare_products (Wave 9)
+    ├── compare.py       ✅ Done — compare_products (Wave 9)
+    └── find_similar.py  ✅ Done — find_similar_products (G-42)
 
 tests/
 ├── fixtures/
 │   └── lmnt-recharge-electrolytes-variety-pack.html  ✅ (452KB real PDP)
-├── test_models.py       ✅ 4 tests
-├── test_storage.py      ✅ 7 tests (+3 HITL CRUD)
+├── test_models.py       ✅ 6 tests (+2 collections/tags)
+├── test_storage.py      ✅ 10 tests (+3 knn collection_filter)
 ├── test_navigate.py     ✅ 3 tests
 ├── test_ingest.py       ✅ 3 tests
 ├── test_reviews.py      ✅ 1 test
 ├── test_corpus.py       ✅ 5 tests
 ├── test_review_themes.py ✅ 2 tests
 ├── test_voice.py        ✅ 4 tests (Wave 10 — new)
-└── test_agent.py        ✅ 13 tests (Tier 1: 5, Tier 2: 8)
+├── test_agent.py        ✅ 13 tests (Tier 1: 5, Tier 2: 8)
+└── test_find_similar.py ✅ 4 tests (G-42)
 
 app.py                   ✅ Done — Streamlit chat shell; uses st.navigation() API (G-18)
 corpus.sqlite            ✅ Done — 150 products pre-built
@@ -194,6 +196,25 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 | G-41: `compare_products` dispatcher called undefined `fetch_product_page` | `healf_agent/tools/__init__.py` | ✅ Replaced with `load_full_product(url)`; verified via Playwright E2E |
 
 **Tests:** 91 passing (unchanged). Commit: `3f98f4e`.
+
+**Post-submission bugfixes (Session 13–14) — 2026-05-17**
+
+| Fix | Files | Status |
+|-----|-------|--------|
+| G-42: Similar-product discovery returned wrong peers — corpus too small, no collection awareness | `models.py`, `storage.py`, `tools/ingest.py`, `tools/benchmark.py`, `tools/find_similar.py` (new), `tools/__init__.py`, `agent.py`, `scripts/build_corpus.py` | ✅ Committed `2af76a6` |
+
+**Tests:** 100 passing. Commits: `2af76a6`, `447988f` (corpus.sqlite 1873 rows).
+
+**Post-submission bugfixes (Session 15) — 2026-05-17**
+
+| Fix | Files | Status |
+|-----|-------|--------|
+| G-44: Stratified sampling silently dropped ~78% of catalog — Thorne B12 missing | `scripts/build_corpus.py`, `healf_agent/corpus.py` | ✅ Full-catalog embed (target=10000), DELETE enforced, skipped.jsonl audit log, embed batch fix |
+| G-45: knn collection filter too broad — BioCare-only peers returned | `healf_agent/tools/find_similar.py` | ✅ `_specific_collections()` filters to ≤200-member collections before knn |
+
+**Tests:** 101 passing. **Corpus:** 6077 rows, 48.2 MB. Latest commit: `8c21542`. Corpus rebuild command: `python -m uv run python scripts/build_corpus.py --out corpus.sqlite --max-concurrency 4`
+
+**⚠️ E2E smoke test not yet re-run after G-45 fix** — next session must verify Thorne B12 appears in BioCare B12 comparison.
 
 ## Key Decisions
 
