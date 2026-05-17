@@ -60,9 +60,22 @@ def build_corpus_text(*, title: str, description: str, claims: Iterable[str]) ->
     return "\n".join(p for p in parts if p)
 
 
-def embed_texts(texts: list[str], *, client, model: str = "text-embedding-3-small") -> list[list[float]]:
-    """Embed a list of texts using OpenAI embeddings API."""
+def embed_texts(
+    texts: list[str],
+    *,
+    client,
+    model: str = "text-embedding-3-small",
+    batch_size: int = 2000,
+) -> list[list[float]]:
+    """Embed a list of texts using OpenAI embeddings API.
+
+    Chunks into batches of `batch_size` (OpenAI limit is 2048 per call).
+    """
     if not texts:
         return []
-    resp = client.embeddings.create(model=model, input=texts)
-    return [d.embedding for d in resp.data]
+    results: list[list[float]] = []
+    for i in range(0, len(texts), batch_size):
+        chunk = texts[i : i + batch_size]
+        resp = client.embeddings.create(model=model, input=chunk)
+        results.extend(d.embedding for d in resp.data)
+    return results
