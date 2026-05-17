@@ -392,3 +392,24 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 **Root cause:** `load_full_product` in `healf_agent/tools/ingest.py` raises `ValueError` when JSON-LD is absent. The Streamlit Fetch button handler in `app.py` does not catch this exception.  
 **Fix:** Wrap the `load_full_product` call in the `app.py` Fetch button handler with `try/except ValueError as e: st.error(f"Could not load product: {e}")`. Optionally also catch `httpx.HTTPError` for network failures.  
 **Status:** OPEN — not yet fixed.
+
+
+---
+
+## G-39 — `benchmark_against_category` always read from the wrong database
+
+**Discovered:** 2026-05-17 Session 11 (E2E test after corpus rebuild)
+**Symptom:** `benchmark_against_category` always returned "no neighbours" even after corpus was rebuilt with real product types. The agent fell back to domain-knowledge comparison every time.
+**Root cause:** `dispatch_tool` in `healf_agent/tools/__init__.py` opened `healf.sqlite` (via `HEALF_DB` env var) for both benchmark and evaluate calls. But corpus embeddings are written to `corpus.sqlite` by `scripts/build_corpus.py`. The `corpus` table in `healf.sqlite` was always empty.
+**Fix:** Changed benchmark/evaluate dispatch blocks to use `HEALF_CORPUS_DB` env var (default `corpus.sqlite`). `evaluate_listing_quality` split into `corpus_storage` (corpus.sqlite, for kNN) and `healf_storage` (healf.sqlite, for review_themes). Committed `86042dc`.
+**Added:** 2026-05-17 Session 11.
+
+
+---
+
+## G-40 — Corpus accumulates stale rows across rebuilds
+
+**Discovered:** 2026-05-17 Session 11 (distribution check after clean rebuild)
+**Symptom:** After two corpus rebuilds, `SELECT COUNT(*) FROM corpus` returned ~267 rows (expected 147). Old `"Unknown"` and `"-"` rows from pre-fix builds persisted. The `upsert_corpus_entry` uses `ON CONFLICT(handle) DO UPDATE` — it updates matching handles but never deletes rows for handles not in the current build.
+**Fix:** Run `DELETE FROM corpus; VACUUM;` before each rebuild, or delete `corpus.sqlite` and let the build recreate it. Always verify row count after rebuild matches the build log.
+**Added:** 2026-05-17 Session 11.

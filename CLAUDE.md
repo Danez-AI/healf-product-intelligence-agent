@@ -176,6 +176,17 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 
 **n8n end-to-end test status: COMPLETE ✅** — All 6 nodes green confirmed 2026-05-16 Session 11. Score 2 < 3 → true branch → Notify Slack (fails gracefully). Workflow versionId: `0292c2e7-78c0-42b9-9d35-6a2753456dc4`.
 
+**Post-submission bugfixes (Session 11) — 2026-05-17**
+
+| Fix | Files | Status |
+|-----|-------|--------|
+| G-38: Fake/404 URL raised raw traceback in Streamlit UI | `app.py` | ✅ Wrapped in try/except → `st.error()` |
+| G-39: `benchmark_against_category` read `healf.sqlite` instead of `corpus.sqlite` | `healf_agent/tools/__init__.py` | ✅ Changed to `HEALF_CORPUS_DB` (default `corpus.sqlite`) |
+| G-40: Corpus accumulates stale rows across rebuilds | `corpus.sqlite` | ✅ `DELETE FROM corpus` before rebuild; documented |
+| Corpus `product_type` gap — all 150 rows were `"Unknown"` | `healf_agent/tools/ingest.py` | ✅ Extract `productType` from RSC flight + collections/tags fallback; 71 types now |
+
+**Tests:** 91 passing (was 87). **Corpus:** 147 rows, 71 types, clean. Commits: `e60c1f1`, `86042dc`.
+
 ## Key Decisions
 
 - **Stack:** Python 3.11+ + Anthropic SDK + Pydantic v2 + SQLite (not PostgreSQL — ship corpus.sqlite in repo)
