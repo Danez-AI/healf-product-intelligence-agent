@@ -15,3 +15,6 @@ evals/results/*.jsonl
 .playwright-mcp/
 playwright-headed.json
 *.png
+corpus_skipped.jsonl
+corpus_build.log
+corpus_build_err.log

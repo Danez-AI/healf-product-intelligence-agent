@@ -428,3 +428,49 @@ p = load_full_product(url)
 ```
 **File:** `healf_agent/tools/__init__.py` (compare_products dispatch block)
 **Added:** 2026-05-17 Session 12.
+
+---
+
+## G-42 — Similar-product discovery returned wrong peers (corpus sample too small, no collection awareness)
+
+**Discovered:** 2026-05-17 Session 14 (user tested BioCare Vitamin B12 comparison)
+**Symptom:** "How does this compare to similar products?" returned Altrient Liposomal B-Complex instead of Thorne Vitamin B12 / Vimergy Organic Liquid B12 — which are visible on healf.com/en-uk/search?q=B12.
+**Root cause (multi-part):**
+1. `corpus.sqlite` held only 147 SKUs from `product_urls[:450]` in `build_corpus.py` — Healf has 6,716 sitemap URLs. Thorne/Vimergy/BioCare B12 were never sampled.
+2. `Product` model stored only `product_type: str` (one bucket). The RSC flight parser already extracted full `collections[]` and `tags[]` but threw them away.
+3. `knn()` filtered only by `product_type` — with no collection awareness, the B12 bucket had 1 entry, triggering the full-corpus cosine fallback that surfaced Altrient.
+4. No live-search tool exists. Shopify JSON endpoints are 404 on Healf. HTML search pages client-render products (not in initial RSC payload).
+**Fix:** Added `Product.collections`, `Product.tags`; `corpus` schema gets `collections TEXT`; `knn()` gains `collection_filter` (collection-overlap → product_type → full-corpus); new `find_similar_products` tool returns candidate URLs for `compare_products`; system prompt routes "compare similar" to this new tool; `build_corpus.py` now ingests full catalog (no cap, `--target 1500`).
+**Note:** Firecrawl.dev is NOT the fix — extraction quality was fine. The candidate pool was the problem.
+**Added:** 2026-05-17 Session 14.
+
+---
+
+## G-43 — Multiple parallel corpus builds launched from Bash background debugging
+
+**Discovered:** 2026-05-17 Session 14
+**Symptom:** User noticed 5 shells running. Three concurrent `build_corpus.py` processes all fetching healf.com with 4 workers each = 12 simultaneous connections. Risk of IP rate-limiting.
+**Root cause:** The Bash tool's `run_in_background` writes output to a temp file. On this Windows system, the output file showed 0 bytes for 30+ seconds while the process was actually running. Repeated debug attempts each launched a new process.
+**Fix:** Use `Start-Process` with explicit `-RedirectStandardOutput corpus_build.log` to get a file you can `Get-Content -Tail 5` to check progress. Never use `run_in_background` for the corpus build — you can't see its output in real time.
+**Restart command:**
+```powershell
+$proc = Start-Process -FilePath "python" -ArgumentList "-m uv run python scripts/build_corpus.py --target 1500 --out corpus.sqlite --max-concurrency 4" -WorkingDirectory 'C:\Users\Daran\AI\Healf AI Agent\.claude\worktrees\feat-healf-agent' -PassThru -NoNewWindow -RedirectStandardOutput "corpus_build.log" -RedirectStandardError "corpus_build_err.log"; Write-Host "PID $($proc.Id)"
+```
+**Added:** 2026-05-17 Session 14.
+
+---
+
+## G-44 — Full-catalog corpus build: stratified sampling silently dropped ~78% of products
+
+**Discovered:** 2026-05-17 Session 15
+**Symptom:** Thorne Vitamin B12 (`thorne-vitamin-b12-formerly-methylcobalamin-60-capsules`) exists on Healf, IS in their sitemap, parses cleanly (product_type='Vitamins & Supplements', collections=['eat','sleep','energy','thorne',...]) — but was absent from `corpus.sqlite` and never appeared in any build log line (not even as a skip).
+**Root cause:** `stratified_sample(target=1500)` with 86 buckets and ~6078 classifiable URLs kept only ~22% of each large bucket. "Vitamins & Supplements" (142 URLs) got ~33 slots — Thorne B12 was deterministically not drawn (seed=0). Sampling drops are silent: no per-URL log, no sidecar file. Catalog-wide loss was ~78% (Eat:2822→615, Unknown:1014→220, Sleep:793→175, Move:650→144).
+**Fix (`build_corpus.py` G-44):**
+1. Default `--target` raised from 1500 to 10000. When `target >= total_classified`, the script skips `stratified_sample` entirely and embeds all classified URLs (~6078).
+2. `DELETE FROM corpus` now runs at script start — stale rows from prior builds can no longer persist (enforces G-40 automatically).
+3. `corpus_skipped.jsonl` written after every build — one JSON entry per dropped URL with `phase` (classify/sample/fetch) and `reason`. Both files added to `.gitignore`.
+**Restart command (full build):**
+```powershell
+$proc = Start-Process -FilePath "python" -ArgumentList "-m uv run python scripts/build_corpus.py --out corpus.sqlite --max-concurrency 4" -WorkingDirectory 'C:\Users\Daran\AI\Healf AI Agent\.claude\worktrees\feat-healf-agent' -PassThru -NoNewWindow -RedirectStandardOutput "corpus_build.log" -RedirectStandardError "corpus_build_err.log"; Write-Host "PID $($proc.Id)"
+```
+**Added:** 2026-05-17 Session 15.
