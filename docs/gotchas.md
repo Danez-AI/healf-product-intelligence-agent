@@ -413,3 +413,18 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 **Symptom:** After two corpus rebuilds, `SELECT COUNT(*) FROM corpus` returned ~267 rows (expected 147). Old `"Unknown"` and `"-"` rows from pre-fix builds persisted. The `upsert_corpus_entry` uses `ON CONFLICT(handle) DO UPDATE` — it updates matching handles but never deletes rows for handles not in the current build.
 **Fix:** Run `DELETE FROM corpus; VACUUM;` before each rebuild, or delete `corpus.sqlite` and let the build recreate it. Always verify row count after rebuild matches the build log.
 **Added:** 2026-05-17 Session 11.
+
+---
+
+## G-41 — `compare_products` dispatcher called undefined `fetch_product_page`
+
+**Discovered:** 2026-05-17 Session 12 (Playwright E2E test of G-39 fix)
+**Symptom:** `compare_products` tool always returned `"error": "name 'fetch_product_page' is not defined"` in the tool trace. The agent fell back to benchmark data only — no structured side-by-side table.
+**Root cause:** The `compare_products` block in `dispatch_tool` (`healf_agent/tools/__init__.py`) called `fetch_product_page(url)` and `parse_product(html, url=url)` — two functions that were never imported in that block and don't exist in scope. This was leftover scaffolding that predated the `load_full_product` consolidation (see CLAUDE.md — "all product fetching goes through `load_full_product`").
+**Fix:** Replace the two-step `fetch_product_page` + `parse_product` calls with a single `load_full_product(url)` call:
+```python
+from healf_agent.tools.ingest import load_full_product
+p = load_full_product(url)
+```
+**File:** `healf_agent/tools/__init__.py` (compare_products dispatch block)
+**Added:** 2026-05-17 Session 12.

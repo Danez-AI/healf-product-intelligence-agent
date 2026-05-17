@@ -224,14 +224,14 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
         return report.model_dump(mode="json")
     if name == "compare_products":
         from healf_agent.tools.compare import compare_products
+        from healf_agent.tools.ingest import load_full_product
 
         urls = arguments.get("urls", [])
         if len(urls) < 2:
             raise ValueError("compare_products requires at least 2 URLs")
         products_to_compare = []
         for url in urls[:4]:
-            html = fetch_product_page(url)
-            p = parse_product(html, url=url)
+            p = load_full_product(url)
             if p:
                 products_to_compare.append(p)
         if len(products_to_compare) < 2:
