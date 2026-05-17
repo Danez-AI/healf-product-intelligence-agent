@@ -135,6 +135,57 @@ def test_find_similar_ignores_generic_collections(storage: Storage) -> None:
     assert "vimergy-b12" in handles
 
 
+def test_find_similar_excludes_same_brand_saturation(storage: Storage) -> None:
+    """Per-brand cap must surface cross-brand peers even when many same-brand SKUs
+    have higher cosine similarity than cross-brand alternatives."""
+    biocare_cols = ["biocare", "vitamin-b12", "b-vitamins"]
+    for i in range(10):
+        storage.upsert_corpus_entry(
+            handle=f"biocare-b-vitamin-sku-{i}",
+            product_type="Vitamins & Supplements",
+            title=f"BioCare B Vitamin {i}",
+            text=f"BioCare supplement {i}",
+            embedding=[0.95, 0.31] + [0.0] * 1534,
+            collections=biocare_cols,
+        )
+    for handle, vec in [
+        ("thorne-vitamin-b12", [0.7, 0.714] + [0.0] * 1534),
+        ("vimergy-liquid-b12", [0.65, 0.76] + [0.0] * 1534),
+    ]:
+        storage.upsert_corpus_entry(
+            handle=handle,
+            product_type="Vitamins & Supplements",
+            title=handle.replace("-", " ").title(),
+            text=f"Test text for {handle}",
+            embedding=vec,
+            collections=["vitamin-b12", "b-vitamins"],
+        )
+
+    product = Product(
+        url="https://healf.com/en-uk/products/biocare-vitamin-b12",
+        handle="biocare-vitamin-b12",
+        title="BioCare Vitamin B12",
+        brand="BioCare",
+        product_type="Vitamins & Supplements",
+        description="BioCare Vitamin B12 capsule.",
+        price_gbp=14.89,
+        currency="GBP",
+        sku="biocare-vitamin-b12",
+        gid="gid://shopify/Product/12345",
+        collections=["biocare", "vitamin-b12", "b-vitamins"],
+    )
+    openai_client = _mock_openai([1.0, 0.0] + [0.0] * 1534)
+
+    result = find_similar_products(product=product, storage=storage, openai_client=openai_client, k=6)
+    handles = [c["handle"] for c in result["candidates"]]
+
+    biocare_count = sum(1 for h in handles if h.startswith("biocare-"))
+    assert biocare_count <= 2, f"Too many BioCare SKUs in candidates: {handles}"
+    assert any(h in handles for h in ("thorne-vitamin-b12", "vimergy-liquid-b12")), (
+        f"No cross-brand peer surfaced: {handles}"
+    )
+
+
 def test_find_similar_products_registered_in_tool_schemas() -> None:
     names = [t["name"] for t in TOOL_SCHEMAS]
     assert "find_similar_products" in names
