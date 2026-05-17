@@ -57,9 +57,7 @@ The same agent core is reachable three ways:
 ```bash
 python -m uv run streamlit run app.py
 ```
-Persistent multi-session history, debug/observability expanders per response, Editorial Wellness theme (Fraunces + Manrope, sage/paper palette). HITL queue at `pages/hitl.py` (sidebar nav). See `docs/gotchas.md` G-19 for stale-process cleanup.
-
-> **Note:** HITL queue page has a known UI-state bug under specific reload sequences — see `docs/gotchas.md` G-17.
+Persistent multi-session history, Editorial Wellness theme (Fraunces + Manrope, sage/paper palette). HITL queue at `pages/hitl.py` (sidebar nav). If the Streamlit process won't restart cleanly, kill any stale Python process on port 8501.
 
 ### 2. MCP server
 ```bash
