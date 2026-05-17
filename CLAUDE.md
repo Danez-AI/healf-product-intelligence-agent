@@ -187,6 +187,14 @@ n8n/healf-catalog-audit.json  🔲 Wave 13
 
 **Tests:** 91 passing (was 87). **Corpus:** 147 rows, 71 types, clean. Commits: `e60c1f1`, `86042dc`.
 
+**Post-submission bugfixes (Session 12) — 2026-05-17**
+
+| Fix | Files | Status |
+|-----|-------|--------|
+| G-41: `compare_products` dispatcher called undefined `fetch_product_page` | `healf_agent/tools/__init__.py` | ✅ Replaced with `load_full_product(url)`; verified via Playwright E2E |
+
+**Tests:** 91 passing (unchanged). Commit: `3f98f4e`.
+
 ## Key Decisions
 
 - **Stack:** Python 3.11+ + Anthropic SDK + Pydantic v2 + SQLite (not PostgreSQL — ship corpus.sqlite in repo)
