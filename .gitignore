@@ -18,3 +18,4 @@ playwright-headed.json
 corpus_skipped.jsonl
 corpus_build.log
 corpus_build_err.log
+.scratch/
