@@ -150,7 +150,7 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
 
         if product is None:
             raise ValueError("benchmark_against_category requires a current product")
-        storage = Storage(Path(os.environ.get("HEALF_DB", "healf.sqlite")))
+        storage = Storage(Path(os.environ.get("HEALF_CORPUS_DB", "corpus.sqlite")))
         storage.init_schema()
         openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         k = int(arguments.get("k", 5))
@@ -171,16 +171,18 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
 
         if product is None:
             raise ValueError("evaluate_listing_quality requires a current product")
-        storage = Storage(Path(os.environ.get("HEALF_DB", "healf.sqlite")))
-        storage.init_schema()
+        corpus_storage = Storage(Path(os.environ.get("HEALF_CORPUS_DB", "corpus.sqlite")))
+        corpus_storage.init_schema()
+        healf_storage = Storage(Path(os.environ.get("HEALF_DB", "healf.sqlite")))
+        healf_storage.init_schema()
         openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         anthropic_client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         neighbours_result = benchmark_against_category(
-            product=product, storage=storage, openai_client=openai_client
+            product=product, storage=corpus_storage, openai_client=openai_client
         )
         neighbours = neighbours_result["neighbours"]
         # Load stored review themes for this product
-        theme_rows = storage.conn.execute(
+        theme_rows = healf_storage.conn.execute(
             "SELECT polarity, label, summary FROM review_themes WHERE product_gid=?",
             (product.gid,)
         ).fetchall()
