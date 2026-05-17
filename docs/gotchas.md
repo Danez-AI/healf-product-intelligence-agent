@@ -381,3 +381,14 @@ Start-Process -FilePath "python" -ArgumentList "-m","uv","run","streamlit","run"
 **Streamlit:** Two new collapsed expanders on every agent reply: "debug — prompts & messages" (system prompt, injected context, per-iter messages/response) and "debug — usage & timing" (dataframe with token counts and latency). Historical messages also re-render these expanders.  
 **No disk persistence:** Debug data lives in `st.session_state` only (per user choice). Extend later via `agent_runs` table or JSONL if needed.  
 **Added:** 2026-05-16 Session 15 — Wave D.
+
+
+---
+
+## G-38 — Fake/404 Product URL Raises Raw Traceback in Streamlit UI
+
+**Discovered:** 2026-05-17 Session 10 (interviewer review)  
+**Symptom:** Entering a URL that returns a 404 (e.g. `healf.com/en-uk/products/this-does-not-exist-zzz123`) triggers `ValueError: no Product JSON-LD found` in `load_full_product`. Streamlit renders the full Python traceback including internal file paths in the main chat area — visible to the end user.  
+**Root cause:** `load_full_product` in `healf_agent/tools/ingest.py` raises `ValueError` when JSON-LD is absent. The Streamlit Fetch button handler in `app.py` does not catch this exception.  
+**Fix:** Wrap the `load_full_product` call in the `app.py` Fetch button handler with `try/except ValueError as e: st.error(f"Could not load product: {e}")`. Optionally also catch `httpx.HTTPError` for network failures.  
+**Status:** OPEN — not yet fixed.

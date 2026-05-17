@@ -164,12 +164,22 @@ def parse_product(html: str, *, url: str) -> Product:
     brand = brand_raw.get("name") if isinstance(brand_raw, dict) else (brand_raw or "Unknown")
     currency_raw = (offers.get("priceCurrency") or "GBP").upper()
     currency = currency_raw if currency_raw in _KNOWN_CURRENCIES else "GBP"
+    flight = extract_rsc_flight(html)
+    _pt = (
+        pblock.get("category")
+        or _product_type_from_flight(flight)
+        or _category_from_collections(flight)
+        or _category_from_tags(flight)
+        or "Unknown"
+    )
+    if _pt in ("-", ""):
+        _pt = _category_from_collections(flight) or _category_from_tags(flight) or "Unknown"
     return Product(
         url=url,
         handle=handle,
         title=pblock.get("name") or handle,
         brand=brand,
-        product_type=pblock.get("category") or "Unknown",
+        product_type=_pt,
         description=pblock.get("description") or "",
         price_gbp=price_gbp,
         currency=currency,
@@ -387,6 +397,81 @@ def extract_metafields(html: str) -> dict[str, str]:
                     out[key] = cleaned
         search_from = start_bracket + len(raw)
     return out
+
+
+_PRODUCT_TYPE_RE = re.compile(r'"productType":"((?:[^"\\]|\\.)*)"')
+
+
+def _product_type_from_flight(flight_text: str) -> str | None:
+    m = _PRODUCT_TYPE_RE.search(flight_text)
+    if not m:
+        return None
+    raw = m.group(1)
+    try:
+        return json.loads(f'"{raw}"')
+    except json.JSONDecodeError:
+        return None
+
+
+_CATEGORY_ALLOWLIST: set[str] = {
+    "move", "eat", "mind", "sleep",
+    "electrolytes", "vitamins-supplements", "supplements", "drinks", "daily-drinks",
+    "performance", "endurance", "energy", "sweat", "hydration",
+    "strength-training", "cellular-health", "drainage-support",
+    "protein", "collagen", "omega-3", "magnesium", "matcha", "coffee",
+    "gut-health", "microbiome", "superfood", "greens",
+    "essential-oil", "skincare", "sun-cream", "deodorant",
+    "water-bottle", "gym-equipment", "sauna",
+}
+
+_COLLECTION_DENY_PATTERNS: tuple[str, ...] = (
+    "-collection", "-picks", "-favourites", "favourites-from-",
+    "christmas-", "mothers-", "fathers-", "valentines-",
+    "gifts-", "bf25", "bf-", "black-friday", "summer-sale",
+    "best-sellers", "all-products", "new-in", "new-arrivals",
+)
+
+_COLLECTIONS_RE = re.compile(r'"collections":\{"edges":\[(.*?)\](?:,"|\})', re.DOTALL)
+_COLLECTION_HANDLE_RE = re.compile(r'"handle":"((?:[^"\\]|\\.)*)"')
+_TAGS_RE = re.compile(r'"tags":\[((?:"(?:[^"\\]|\\.)*",?)*)\]')
+
+
+def _collection_handles_from_flight(flight_text: str) -> list[str]:
+    m = _COLLECTIONS_RE.search(flight_text)
+    if not m:
+        return []
+    return _COLLECTION_HANDLE_RE.findall(m.group(1))
+
+
+def _tag_values_from_flight(flight_text: str) -> list[str]:
+    m = _TAGS_RE.search(flight_text)
+    if not m:
+        return []
+    try:
+        return [str(t) for t in json.loads("[" + m.group(1) + "]")]
+    except json.JSONDecodeError:
+        return []
+
+
+def _is_allowed_collection(handle: str) -> bool:
+    h = handle.lower()
+    if any(p in h for p in _COLLECTION_DENY_PATTERNS):
+        return False
+    return h in _CATEGORY_ALLOWLIST
+
+
+def _category_from_collections(flight_text: str) -> str | None:
+    for handle in _collection_handles_from_flight(flight_text):
+        if _is_allowed_collection(handle):
+            return handle.replace("-", " ").title()
+    return None
+
+
+def _category_from_tags(flight_text: str) -> str | None:
+    for tag in _tag_values_from_flight(flight_text):
+        if tag.lower().replace(" ", "-") in _CATEGORY_ALLOWLIST:
+            return tag
+    return None
 
 
 def load_full_product(url: str) -> Product:

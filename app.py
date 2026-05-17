@@ -150,11 +150,14 @@ def chat_page() -> None:
     # Handle fetch
     if fetch and url:
         with st.spinner("Fetching product…"):
-            product = load_full_product(url)
-            storage.upsert_product(product)
-            storage.update_session_product(session_id, product.handle)
-            st.session_state["product"] = product.model_dump(mode="json")
-        st.toast(f"Loaded {product.title}", icon="✅")
+            try:
+                product = load_full_product(url)
+                storage.upsert_product(product)
+                storage.update_session_product(session_id, product.handle)
+                st.session_state["product"] = product.model_dump(mode="json")
+                st.toast(f"Loaded {product.title}", icon="✅")
+            except Exception as exc:
+                st.error(f"Could not load product: {exc}")
 
     product_dict = st.session_state.get("product")
     product: Product | None = Product.model_validate(product_dict) if product_dict else None

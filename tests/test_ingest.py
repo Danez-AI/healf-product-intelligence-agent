@@ -3,9 +3,15 @@ from pathlib import Path
 from healf_agent.tools.ingest import (
     extract_json_ld,
     extract_metafields,
+    extract_rsc_flight,
     load_full_product,
     parse_product,
     _clean_metafield_text,
+    _product_type_from_flight,
+    _collection_handles_from_flight,
+    _tag_values_from_flight,
+    _category_from_collections,
+    _category_from_tags,
     _split_ingredient_blob,
     _split_ingredient_blob_by_flavour,
     _extract_descriptive_text,
@@ -237,3 +243,33 @@ def test_claims_extracted_from_old_description_lmnt(monkeypatch) -> None:
     assert any(kw in all_claims_text for kw in ["magnesium", "tiredness", "electrolyte", "sodium"]), (
         f"Expected at least one EFSA-style claim keyword; got: {product.claims}"
     )
+
+
+def test_parse_product_extracts_product_type_from_rsc() -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    p = parse_product(
+        html,
+        url="https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack",
+    )
+    assert p.product_type == "Vitamins & Supplements"
+
+
+def test_collection_handles_from_flight_lmnt() -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    flight = extract_rsc_flight(html)
+    handles = _collection_handles_from_flight(flight)
+    assert "electrolytes" in handles
+    assert "vitamins-supplements" in handles
+
+
+def test_tag_values_from_flight_lmnt() -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    flight = extract_rsc_flight(html)
+    tags = _tag_values_from_flight(flight)
+    assert "Electrolytes" in tags
+    assert "goal:Endurance" in tags
+
+
+def test_category_from_collections_filters_curator_lists() -> None:
+    flight = '"collections":{"edges":[{"node":{"handle":"annas-collection"}},{"node":{"handle":"electrolytes"}}]}'
+    assert _category_from_collections(flight) == "Electrolytes"
