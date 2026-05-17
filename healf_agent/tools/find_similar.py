@@ -1,11 +1,34 @@
 """find_similar_products: discovery tool returning candidate URLs for compare_products."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from healf_agent.corpus import build_corpus_text
 from healf_agent.models import Product
 from healf_agent.storage import Storage
+
+# Collections with more members than this threshold are site-wide merchandising
+# tags (e.g. "all-products-1": 6077, "best-sellers": 6077) that match almost
+# every product and add no discriminating signal. Only small, specific collections
+# (e.g. "vitamin-b12": 32, "biocare": 118) should drive candidate retrieval.
+_MAX_COLLECTION_SIZE = 200
+
+
+def _specific_collections(collections: list[str], storage: Storage) -> set[str]:
+    """Return only collections whose corpus membership is <= _MAX_COLLECTION_SIZE."""
+    if not collections:
+        return set()
+    rows = storage.conn.execute("SELECT collections FROM corpus").fetchall()
+    freq: dict[str, int] = {}
+    for row in rows:
+        for c in json.loads(row[0] or "[]"):
+            freq[c] = freq.get(c, 0) + 1
+    specific = {c for c in collections if freq.get(c, 0) <= _MAX_COLLECTION_SIZE}
+    if not specific:
+        # All collections are generic — fall back to the 3 most specific ones.
+        specific = set(sorted(collections, key=lambda c: freq.get(c, 0))[:3])
+    return specific
 
 
 def find_similar_products(
@@ -25,7 +48,7 @@ def find_similar_products(
     resp = openai_client.embeddings.create(model=embed_model, input=[query_text])
     query_vec = resp.data[0].embedding
 
-    collection_filter = set(product.collections) if product.collections else None
+    collection_filter = _specific_collections(product.collections, storage) if product.collections else None
     neighbours = storage.knn(
         product_type=product.product_type,
         query_vec=query_vec,

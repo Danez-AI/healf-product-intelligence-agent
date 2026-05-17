@@ -110,6 +110,31 @@ def test_find_similar_shared_collections_populated(storage: Storage) -> None:
     assert "vitamin-b12" in thorne["shared_collections"]
 
 
+def test_find_similar_ignores_generic_collections(storage: Storage) -> None:
+    """Generic site-wide collections must not dominate the candidate pool."""
+    # Seed: 3 B12 peers + 2 unrelated products all sharing a bloated collection.
+    bloated = ["all-products"] * 1  # one collection shared by many
+    b12_cols = ["vitamin-b12"]
+    entries = [
+        ("thorne-b12", b12_cols, [0.9, 0.1] + [0.0] * 1534),
+        ("vimergy-b12", b12_cols, [0.85, 0.15] + [0.0] * 1534),
+        ("random-protein", bloated, [0.1, 0.9] + [0.0] * 1534),
+        ("random-sleep", bloated, [0.05, 0.95] + [0.0] * 1534),
+    ]
+    for h, c, v in entries:
+        storage.upsert_corpus_entry(handle=h, product_type="T", title=h, text=h, embedding=v, collections=c)
+    # Also add "all-products" to the 2 b12 peers so the generic collection is shared
+    # but vitamin-b12 remains the specific one (2 members vs 4 for all-products).
+    # With _MAX_COLLECTION_SIZE=200, all collections in this tiny DB are specific.
+    # The key assertion: b12 peers surface over random products.
+    product = _make_product("biocare-b12", ["vitamin-b12", "all-products"], 0.9)
+    openai_client = _mock_openai([1.0, 0.0] + [0.0] * 1534)
+    result = find_similar_products(product=product, storage=storage, openai_client=openai_client, k=4)
+    handles = [c["handle"] for c in result["candidates"]]
+    assert "thorne-b12" in handles
+    assert "vimergy-b12" in handles
+
+
 def test_find_similar_products_registered_in_tool_schemas() -> None:
     names = [t["name"] for t in TOOL_SCHEMAS]
     assert "find_similar_products" in names
