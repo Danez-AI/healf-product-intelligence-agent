@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS corpus (
     product_type TEXT NOT NULL,
     title TEXT NOT NULL,
     text TEXT NOT NULL,
-    embedding BLOB NOT NULL
+    embedding BLOB NOT NULL,
+    collections TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS idx_corpus_type ON corpus(product_type);
 CREATE TABLE IF NOT EXISTS review_themes (
@@ -116,6 +117,12 @@ class Storage:
             except sqlite3.OperationalError as e:
                 if "duplicate column" not in str(e).lower():
                     raise
+        try:
+            self.conn.execute("ALTER TABLE corpus ADD COLUMN collections TEXT NOT NULL DEFAULT '[]'")
+            self.conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
 
     # ---- products ----
     def upsert_product(self, p: Product) -> None:
@@ -161,35 +168,70 @@ class Storage:
         title: str,
         text: str,
         embedding: list[float],
+        collections: list[str] | None = None,
     ) -> None:
         self.conn.execute(
-            "INSERT INTO corpus(handle, product_type, title, text, embedding) VALUES(?,?,?,?,?) "
-            "ON CONFLICT(handle) DO UPDATE SET product_type=excluded.product_type, title=excluded.title, text=excluded.text, embedding=excluded.embedding",
-            (handle, product_type, title, text, _vec_to_blob(embedding)),
+            "INSERT INTO corpus(handle, product_type, title, text, embedding, collections) VALUES(?,?,?,?,?,?) "
+            "ON CONFLICT(handle) DO UPDATE SET product_type=excluded.product_type, title=excluded.title, text=excluded.text, embedding=excluded.embedding, collections=excluded.collections",
+            (handle, product_type, title, text, _vec_to_blob(embedding), json.dumps(collections or [])),
         )
         self.conn.commit()
 
-    def knn(self, *, product_type: str | None, query_vec: list[float], k: int = 5) -> list[dict]:
+    def knn(
+        self,
+        *,
+        product_type: str | None,
+        query_vec: list[float],
+        k: int = 5,
+        collection_filter: set[str] | None = None,
+    ) -> list[dict]:
+        all_rows = self.conn.execute(
+            "SELECT handle, product_type, title, text, embedding, collections FROM corpus"
+        ).fetchall()
+
+        def _score_rows(rows) -> list[dict]:
+            scored = [
+                {
+                    "handle": r["handle"],
+                    "title": r["title"],
+                    "text": r["text"],
+                    "score": _cosine(query_vec, _blob_to_vec(r["embedding"])),
+                    "collections": json.loads(r["collections"] or "[]"),
+                }
+                for r in rows
+            ]
+            scored.sort(key=lambda x: x["score"], reverse=True)
+            return scored[:k]
+
+        # Priority 1: collection overlap
+        if collection_filter:
+            collection_rows = [
+                r for r in all_rows
+                if set(json.loads(r["collections"] or "[]")) & collection_filter
+            ]
+            results = _score_rows(collection_rows)
+            if len(results) >= k:
+                return results
+            # top up from product_type bucket (excluding already-found handles)
+            found_handles = {r["handle"] for r in results}
+            if product_type is not None:
+                type_rows = [r for r in all_rows if r["product_type"] == product_type and r["handle"] not in found_handles]
+                results += _score_rows(type_rows)[: k - len(results)]
+            if len(results) >= k:
+                return results[:k]
+            # final fallback: full corpus
+            remaining_handles = found_handles | {r["handle"] for r in results}
+            fallback_rows = [r for r in all_rows if r["handle"] not in remaining_handles]
+            results += _score_rows(fallback_rows)[: k - len(results)]
+            return results[:k]
+
+        # Legacy path: filter by product_type (G-04 fallback preserved)
         if product_type is not None:
-            rows = self.conn.execute(
-                "SELECT handle, title, text, embedding FROM corpus WHERE product_type=?",
-                (product_type,),
-            ).fetchall()
-        else:
-            rows = self.conn.execute(
-                "SELECT handle, title, text, embedding FROM corpus",
-            ).fetchall()
-        scored = [
-            {
-                "handle": r["handle"],
-                "title": r["title"],
-                "text": r["text"],
-                "score": _cosine(query_vec, _blob_to_vec(r["embedding"])),
-            }
-            for r in rows
-        ]
-        scored.sort(key=lambda x: x["score"], reverse=True)
-        return scored[:k]
+            type_rows = [r for r in all_rows if r["product_type"] == product_type]
+            results = _score_rows(type_rows)
+            if results:
+                return results
+        return _score_rows(all_rows)
 
     # ---- hitl_queue ----
     def _row_to_hitl(self, row: sqlite3.Row) -> HITLEntry:

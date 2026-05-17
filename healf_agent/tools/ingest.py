@@ -188,6 +188,8 @@ def parse_product(html: str, *, url: str) -> Product:
         images=_images_from_block(pblock),
         ingredients=[],
         claims=[],
+        collections=_collection_handles_from_flight(flight),
+        tags=_tag_values_from_flight(flight),
         rating_value=float(rating["ratingValue"]) if rating.get("ratingValue") else None,
         rating_count=int(rating["reviewCount"]) if rating.get("reviewCount") else None,
         raw_jsonld=pblock,

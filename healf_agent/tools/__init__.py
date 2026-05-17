@@ -66,6 +66,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "find_similar_products",
+        "description": "Find Healf products similar to the current one by shared collection memberships and semantic similarity. Returns a ranked list of candidate URLs to feed into compare_products.",
+        "input_schema": {"type": "object", "properties": {"k": {"type": "integer", "default": 6}}, "required": []},
+    },
+    {
         "name": "compare_products",
         "description": "Compare 2-4 Healf product URLs side-by-side on price, rating, ingredients, images.",
         "input_schema": {
@@ -222,6 +227,25 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
         themes = [{"polarity": r["polarity"], "label": r["label"], "summary": r["summary"]} for r in theme_rows]
         report = check_consistency(product=product, themes=themes, anthropic_client=anthropic_client)
         return report.model_dump(mode="json")
+    if name == "find_similar_products":
+        from healf_agent.tools.find_similar import find_similar_products
+        from healf_agent.storage import Storage
+        from pathlib import Path
+        import os
+        from openai import OpenAI
+
+        if product is None:
+            raise ValueError("find_similar_products requires a current product")
+        storage = Storage(Path(os.environ.get("HEALF_CORPUS_DB", "corpus.sqlite")))
+        storage.init_schema()
+        openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        k = int(arguments.get("k", 6))
+        return find_similar_products(
+            product=product,
+            storage=storage,
+            openai_client=openai_client,
+            k=k,
+        )
     if name == "compare_products":
         from healf_agent.tools.compare import compare_products
         from healf_agent.tools.ingest import load_full_product

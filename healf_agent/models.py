@@ -49,6 +49,8 @@ class Product(BaseModel):
     images: list[Image] = Field(default_factory=list)
     ingredients: list[str] = Field(default_factory=list)
     claims: list[str] = Field(default_factory=list)
+    collections: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     rating_value: float | None = None
     rating_count: int | None = None
     raw_jsonld: dict | None = None

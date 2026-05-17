@@ -76,6 +76,90 @@ def test_corpus_round_trip(storage: Storage) -> None:
     assert near[0]["handle"] == "creatine-monohydrate"
 
 
+def test_corpus_upsert_with_collections(storage: Storage) -> None:
+    storage.upsert_corpus_entry(
+        handle="biocare-vitamin-b12",
+        product_type="Vitamins & Supplements",
+        title="BioCare Vitamin B12",
+        text="Methylcobalamin B12 supplement.",
+        embedding=[0.5] * 1536,
+        collections=["vitamin-b12", "eat"],
+    )
+    import json
+    row = storage.conn.execute(
+        "SELECT collections FROM corpus WHERE handle='biocare-vitamin-b12'"
+    ).fetchone()
+    assert row is not None
+    assert json.loads(row["collections"]) == ["vitamin-b12", "eat"]
+
+
+def test_knn_collection_filter_ranks_overlap_first(storage: Storage) -> None:
+    # Three products with different collection memberships
+    # biocare-b12: shares "vitamin-b12" with query
+    storage.upsert_corpus_entry(
+        handle="biocare-b12",
+        product_type="Vitamins & Supplements",
+        title="BioCare B12",
+        text="B12 supplement",
+        embedding=[1.0, 0.0] + [0.0] * 1534,
+        collections=["vitamin-b12", "eat"],
+    )
+    # thorne-b12: also in vitamin-b12 collection
+    storage.upsert_corpus_entry(
+        handle="thorne-b12",
+        product_type="Vitamins & Supplements",
+        title="Thorne B12",
+        text="Thorne methylcobalamin",
+        embedding=[0.9, 0.1] + [0.0] * 1534,
+        collections=["vitamin-b12"],
+    )
+    # magnesium: same product_type but no collection overlap
+    storage.upsert_corpus_entry(
+        handle="magnesium-glycinate",
+        product_type="Vitamins & Supplements",
+        title="Magnesium Glycinate",
+        text="Magnesium supplement for sleep",
+        embedding=[0.8, 0.2] + [0.0] * 1534,
+        collections=["magnesium", "sleep"],
+    )
+
+    # Query with collection_filter={"vitamin-b12"}
+    results = storage.knn(
+        product_type="Vitamins & Supplements",
+        query_vec=[1.0, 0.0] + [0.0] * 1534,
+        k=3,
+        collection_filter={"vitamin-b12"},
+    )
+    result_handles = [r["handle"] for r in results]
+    # Collection-overlap products must appear before magnesium (no overlap)
+    assert "biocare-b12" in result_handles
+    assert "thorne-b12" in result_handles
+    # magnesium appears only as fallback top-up (after the 2 collection hits)
+    overlap_idx = [result_handles.index(h) for h in ("biocare-b12", "thorne-b12") if h in result_handles]
+    if "magnesium-glycinate" in result_handles:
+        magnesium_idx = result_handles.index("magnesium-glycinate")
+        assert all(magnesium_idx > i for i in overlap_idx)
+
+
+def test_knn_collection_filter_empty_falls_back_to_type(storage: Storage) -> None:
+    storage.upsert_corpus_entry(
+        handle="whey-protein",
+        product_type="Protein",
+        title="Whey Protein",
+        text="High quality whey",
+        embedding=[0.3] * 1536,
+        collections=["protein"],
+    )
+    # Filter with non-overlapping collection — should fall through to product_type
+    results = storage.knn(
+        product_type="Protein",
+        query_vec=[0.3] * 1536,
+        k=1,
+        collection_filter={"vitamin-b12"},
+    )
+    assert results[0]["handle"] == "whey-protein"
+
+
 def test_init_schema_is_idempotent(storage: Storage) -> None:
     storage.init_schema()
     storage.init_schema()  # should not raise

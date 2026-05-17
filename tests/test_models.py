@@ -77,3 +77,43 @@ def test_eval_report_average_score():
         corpus_references=[],
     )
     assert rep.average() == 3.0
+
+
+def test_product_collections_and_tags_round_trip():
+    p = Product(
+        url="https://healf.com/en-uk/products/biocare-vitamin-b12",
+        handle="biocare-vitamin-b12",
+        title="BioCare Vitamin B12",
+        brand="BioCare",
+        product_type="Vitamins & Supplements",
+        description="Methylcobalamin B12.",
+        price_gbp=14.89,
+        currency="GBP",
+        sku="BC-B12",
+        gid="gid://shopify/Product/123",
+        collections=["vitamin-b12", "vitamins-and-supplements", "eat"],
+        tags=["B12", "energy", "vegan"],
+    )
+    assert p.collections == ["vitamin-b12", "vitamins-and-supplements", "eat"]
+    assert p.tags == ["B12", "energy", "vegan"]
+    dumped = p.model_dump(mode="json")
+    restored = Product.model_validate(dumped)
+    assert restored.collections == p.collections
+    assert restored.tags == p.tags
+
+
+def test_product_collections_defaults_to_empty():
+    p = Product(
+        url="https://healf.com/en-uk/products/some-product",
+        handle="some-product",
+        title="Some Product",
+        brand="Brand",
+        product_type="Unknown",
+        description="",
+        price_gbp=10.0,
+        currency="GBP",
+        sku="SP-1",
+        gid="gid://shopify/Product/999",
+    )
+    assert p.collections == []
+    assert p.tags == []

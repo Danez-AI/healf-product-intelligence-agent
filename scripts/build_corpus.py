@@ -1,6 +1,10 @@
-"""Build corpus.sqlite by sampling Healf's product sitemap.
+"""Build corpus.sqlite by ingesting Healf's full product catalog.
 
-Run: `python -m uv run python scripts/build_corpus.py --target 150 --out corpus.sqlite`
+Run:
+    python -m uv run python scripts/build_corpus.py --out corpus.sqlite
+
+Default target is 1500 (covers the full catalog; stratified sampling is a safety net).
+Full build takes ~20-30 min depending on network speed. Use --max-concurrency to tune.
 """
 from __future__ import annotations
 
@@ -9,6 +13,7 @@ import os
 import sys
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import httpx
@@ -31,10 +36,35 @@ from healf_agent.tools.ingest import parse_product
 from healf_agent.tools.navigate import fetch_product_page
 
 
+def _classify(url: str) -> tuple[str, str, list[str]] | None:
+    """Return (product_type, url, collections) or None on failure."""
+    try:
+        html = fetch_product_page(url)
+        p = parse_product(html, url=url)
+        return (p.product_type, url, p.collections)
+    except Exception as exc:
+        print(f"  skip {url}: {exc}")
+        return None
+
+
+def _fetch_full(url: str) -> tuple[str, object] | None:
+    """Return (url, Product) or None on failure."""
+    try:
+        html = fetch_product_page(url)
+        p = parse_product(html, url=url)
+        return (url, p)
+    except Exception as exc:
+        print(f"  skip {url}: {exc}")
+        return None
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--target", type=int, default=150)
+    ap.add_argument("--target", type=int, default=1500,
+                    help="Max products in corpus. Default 1500 covers the full catalog.")
     ap.add_argument("--out", default="corpus.sqlite")
+    ap.add_argument("--max-concurrency", type=int, default=4,
+                    help="Parallel fetch workers. Keep ≤4 to stay polite.")
     args = ap.parse_args()
 
     storage = Storage(args.out)
@@ -50,55 +80,68 @@ def main() -> None:
             raise SystemExit("could not find products sitemap")
         print(f"Products sitemap: {products_sitemap_url}")
         product_urls = parse_product_sitemap(client.get(products_sitemap_url).text)
-    print(f"Found {len(product_urls)} product URLs")
+    print(f"Found {len(product_urls)} product URLs in sitemap")
 
-    # Bucket by product_type
-    print("Bucketing products by type (sampling up to 3x target to classify)...")
+    # Classify all URLs (no sample cap) to build type buckets with collection info
+    print(f"Classifying all {len(product_urls)} products (concurrency={args.max_concurrency})...")
     buckets: dict[str, list[str]] = defaultdict(list)
-    sample_pool = product_urls[: args.target * 3]
-    for i, url in enumerate(sample_pool):
-        try:
-            html = fetch_product_page(url)
-            p = parse_product(html, url=url)
-            buckets[p.product_type].append(url)
-            if i % 10 == 0:
-                print(f"  classified {i}/{len(sample_pool)} ...")
-        except Exception as exc:
-            print(f"  skip {url}: {exc}")
-        time.sleep(0.2)  # politeness
+    url_collections: dict[str, list[str]] = {}
+
+    with ThreadPoolExecutor(max_workers=args.max_concurrency) as pool:
+        futures = {pool.submit(_classify, url): url for url in product_urls}
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            result = fut.result()
+            if result is not None:
+                product_type, url, collections = result
+                buckets[product_type].append(url)
+                url_collections[url] = collections
+            if done % 50 == 0:
+                print(f"  classified {done}/{len(product_urls)} ...")
+            time.sleep(0.05)  # gentle inter-task delay
 
     print(f"Buckets: { {k: len(v) for k, v in buckets.items()} }")
     sample = stratified_sample(buckets, target_total=args.target)
-    print(f"Sampled {sum(len(v) for v in sample.values())} products across {len(sample)} types")
+    sampled_total = sum(len(v) for v in sample.values())
+    print(f"Sampled {sampled_total} products across {len(sample)} types")
 
     openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
+    # Second pass: full product fetch for sampled URLs
+    print(f"Fetching full product data for {sampled_total} sampled products...")
+    all_urls = [url for urls in sample.values() for url in urls]
+
     texts: list[str] = []
-    rows: list[tuple[str, str, str, str]] = []
-    for product_type, urls in sample.items():
-        for url in urls:
-            try:
-                html = fetch_product_page(url)
-                p = parse_product(html, url=url)
-            except Exception as exc:
-                print(f"  skip {url}: {exc}")
-                continue
-            text = build_corpus_text(
-                title=p.title, description=p.description, claims=p.claims
-            )
-            rows.append((p.handle, product_type, p.title, text))
-            texts.append(text)
-            time.sleep(0.2)
+    rows: list[tuple[str, str, str, str, list[str]]] = []
+
+    with ThreadPoolExecutor(max_workers=args.max_concurrency) as pool:
+        futures = {pool.submit(_fetch_full, url): url for url in all_urls}
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            result = fut.result()
+            if result is not None:
+                url, p = result
+                text = build_corpus_text(
+                    title=p.title, description=p.description, claims=p.claims
+                )
+                rows.append((p.handle, p.product_type, p.title, text, p.collections))
+                texts.append(text)
+            if done % 50 == 0:
+                print(f"  fetched {done}/{sampled_total} ...")
+            time.sleep(0.05)
 
     print(f"Embedding {len(texts)} texts via OpenAI...")
     vecs = embed_texts(texts, client=openai_client)
-    for (handle, product_type, title, text), vec in zip(rows, vecs):
+    for (handle, product_type, title, text, collections), vec in zip(rows, vecs):
         storage.upsert_corpus_entry(
             handle=handle,
             product_type=product_type,
             title=title,
             text=text,
             embedding=vec,
+            collections=collections,
         )
     print(f"corpus built: {len(rows)} entries across {len(sample)} buckets -> {args.out}")
 
