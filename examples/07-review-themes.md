@@ -11,30 +11,38 @@
 
 ## Agent response
 
-Unfortunately, the review clustering tool returned **0 reviews** — which means the review text data isn't currently available for extraction, despite the product page showing **445 reviews at 4.9/5**.
+Unfortunately, the review clustering returned **0 reviews** — it looks like the review data isn't currently accessible via the API for this product, despite the listing showing **447 reviews at 4.9/5** on the Healf page.
 
-This is likely a data pipeline issue (reviews may be stored in a separate system or not yet ingested into the corpus). Here's what I'd suggest:
+Here's what I can tell you:
 
 ---
 
-### What to do next
+### What the data returned
+| Metric | Value |
+|---|---|
+| Reviews clustered | 0 |
+| Themes identified | None |
+| API status | Empty corpus returned |
 
-1. **Check the live Healf page directly**
-   👉 [healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack](https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack)
-   The 445 reviews are visible on-site and are likely rich with customer sentiment — worth a manual scan or a scrape.
+---
 
-2. **Re-trigger ingestion** — if your team controls the review pipeline, flagging this product (LMNT Recharge Variety Pack) for a re-sync would allow the clustering tool to work properly on the next run.
+### What I'd recommend instead
 
-3. **What we *can* infer from the rating alone:**
-   A **4.9/5 from 445 reviews** is an exceptionally strong signal. At that scale and score, the product is statistically in the top tier of the Healf catalogue — negative themes, if any, are likely minor (e.g. packaging, price, or flavour preference). I can run a **category benchmark** against similar electrolyte products to infer what customers in this space typically complain about, if that would be helpful.
+1. **Manual spot-check** — Head directly to the [product page](https://healf.com/en-uk/products/lmnt-recharge-electrolytes-variety-pack) and read through the 447 reviews there. With a 4.9/5 rating, the signal is strongly positive, but the specifics (flavour preferences, texture, mixability, value) will only be visible in the raw reviews.
 
-Would you like me to benchmark this against similar products in the Healf catalogue instead? 🔍
+2. **Re-run clustering later** — This could be a temporary indexing gap. If the review corpus gets refreshed, the clustering tool should surface themes automatically.
+
+3. **Cross-reference with consistency check** — I can run `check_consistency` to see if the page claims align with what reviewers typically flag, which may give indirect clues about customer sentiment. Would you like me to do that?
+
+---
+
+Want me to try any of those follow-up steps, or is there another angle on this product you'd like to explore?
 
 ## Run metadata
 
 - Iterations: 2
-- Total latency: 11,454 ms
-- Tokens: 1,054 input / 441 output (cache_read: 2,754)
+- Total latency: 12,281 ms
+- Tokens: 2,144 input / 393 output (cache_read: 3,100)
 - Model: claude-sonnet-4-6
 
 ---

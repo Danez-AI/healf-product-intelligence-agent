@@ -36,6 +36,7 @@ def tool_names() -> list[str]:
         "evaluate_listing_quality",
         "score_images",
         "check_consistency",
+        "find_similar_products",
         "compare_products",
         "draft_rewrite",
         "enqueue_hitl",
@@ -95,6 +96,12 @@ def score_images() -> dict[str, Any]:
 def check_consistency() -> dict[str, Any]:
     """Cross-validate ingredients, claims, description, and review themes."""
     return _dispatch(name="check_consistency", arguments={}, product=_current_product)
+
+
+@mcp.tool()
+def find_similar_products(k: int = 6) -> dict[str, Any]:
+    """Find products similar to the cached current product by collection overlap + semantic similarity. Returns candidate URLs for compare_products."""
+    return _dispatch(name="find_similar_products", arguments={"k": k}, product=_current_product)
 
 
 @mcp.tool()

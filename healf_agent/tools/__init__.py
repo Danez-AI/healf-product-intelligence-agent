@@ -248,7 +248,6 @@ def dispatch_tool(*, name: str, arguments: dict[str, Any], product: Product | No
         )
     if name == "compare_products":
         from healf_agent.tools.compare import compare_products
-        from healf_agent.tools.ingest import load_full_product
 
         urls = arguments.get("urls", [])
         if len(urls) < 2:

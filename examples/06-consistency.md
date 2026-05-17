@@ -8,68 +8,70 @@
 ## Tool trace
 
 1. → `check_consistency()`
-2. → `cluster_review_themes()`
-3. → `score_images()`
+2. → `cluster_review_themes(polarity_filter="all")`
+3. → `evaluate_listing_quality()`
 
 ## Agent response
 
-Here's a thorough consistency audit across all three data layers — structured listing data, page description text, and OCR'd label text from images.
+Here's a full consistency audit across three dimensions:
 
 ---
 
-## ✅ Overall Verdict: Largely Consistent — with 2 Flags Worth Fixing
-
-The automated `check_consistency` tool returned **zero critical contradictions**, which is a good baseline. But cross-referencing the page text against the label OCR surfaces two issues:
+## ✅ / ⚠️ Consistency Audit: LMNT Recharge Electrolytes — Variety Pack
 
 ---
 
-### 🟡 Flag 1 — Serving-Size Instruction Mismatch
+### 🔴 Issue 1: Encoding Artefacts in Claims Copy
+**Severity: High (data quality)**
 
-| Source | Says |
-|---|---|
-| **Page description (Suggested Use)** | "Mix one packet with **16 ounces (500ml)** of water" |
-| **Label OCR (Nutrition Facts)** | Serving size listed as **1 stick pack (6g)** — no serving-liquid volume stated on label |
+Two of the three registered claims contain a stray `Â` character:
+- *"Contains magnesium, which plays a role in normal muscle and psychological function.**Â**"*
+- *"Helps reduce tiredness and fatigue.**Â**"*
 
-❗ **16 oz = ~473ml**, not 500ml. These are close but not identical — pick one and be consistent across the listing to avoid consumer confusion, especially on a UK-facing page where ml is the native unit. **Recommend standardising to 500ml / ~17 fl oz.**
-
----
-
-### 🟡 Flag 2 — Malic Acid is Watermelon-Only, but the Ingredient List Reads as Universal
-
-| Source | Says |
-|---|---|
-| **Structured ingredients list (listing)** | "Malic Acid" listed flatly — no flavour attribution |
-| **Label OCR (image 4)** | Malic Acid appears **only in Watermelon Salt**; Citrus, Raspberry, and Lemonade all use **Citric Acid** instead |
-
-❗ A shopper reading the listing's ingredient block could reasonably assume every sachet contains Malic Acid. The label makes clear it's flavour-specific. The listing should note *"Watermelon Salt uses Malic Acid in place of Citric Acid"* or present per-flavour ingredient breakdowns — particularly relevant for anyone with sensitivities.
+This is a UTF-8 encoding corruption artefact (a mis-decoded `\u00c2` byte). It's visible in the structured claims field and likely on the live page. **Fix immediately** — it damages professionalism and signals sloppy data hygiene.
 
 ---
 
-### ✅ What Is Consistent
+### 🟡 Issue 2: "Zero Sugar" Simplification vs. Ingredient List
+**Severity: Medium (potential consumer mislead)**
 
-| Check | Result |
-|---|---|
-| **Electrolyte quantities** | Label OCR confirms **1,000mg Sodium / 200mg Potassium / 60mg Magnesium** per sachet — consistent with "precise blend of sodium, magnesium, and potassium" in description |
-| **Flavour count & names** | Page text (Watermelon Salt, Citrus Salt, Lemonade, Raspberry Salt × 3 each = 12) matches label OCR exactly |
-| **Magnesium claims** | "Contributes to normal muscle and psychological function / helps reduce tiredness and fatigue" in description matches the EU-compliant health claims in the structured claims field |
-| **Sugar-free status** | Label OCR reads "NO SUGAR / TOTAL SUGARS 0g" — consistent with zero-sugar messaging in description |
-| **Stevia as sweetener** | Present in all four per-flavour ingredient lists on label; matches structured ingredients |
-| **No caffeine claim** | Label reads "NO CAFFEINE" — not contradicted anywhere in the listing |
+The description frames this as a straightforward sodium/magnesium/potassium blend, but the ingredient list includes **Stevia Leaf Extract** and **five distinct flavouring agents** — none of which are mentioned or contextualised in the description. While stevia is not technically sugar, omitting any mention of sweeteners creates a misleading simplification. Competitors on Healf typically call out "naturally sweetened" or "stevia-sweetened" explicitly. Worth surfacing for transparency.
 
 ---
 
-### 📋 Recommended Actions
+### 🟡 Issue 3: Fatigue Claim vs. Ingredient Support
+**Severity: Medium (regulatory/substantiation)**
 
-1. **Fix the serving-liquid inconsistency** — change "16 ounces (500ml)" to "500ml (approx. 17 fl oz)" or align to a single standard.
-2. **Clarify Malic Acid is Watermelon-only** — either annotate the ingredient list or add a brief per-flavour breakdown. This is both a transparency and potential allergen/sensitivity concern.
-3. **Note:** Review theme clustering returned 0 reviews in the pipeline despite 445 being shown on the listing — worth flagging to the data team as a potential ingestion gap, since customer voice can't currently validate whether any claims are being disputed in reviews.
+The claim *"Helps reduce tiredness and fatigue"* is present across the description and claims field. This is an EU-authorised health claim — **but it is authorised specifically for magnesium** (Regulation EC 1924/2006). The listing correctly attributes this to magnesium, so the claim is technically defensible. However, the consistency tool flags that **no B-vitamins, iron, or other commonly recognised anti-fatigue co-factors are present**, meaning the claim rests entirely on magnesium. This is fine *if* the magnesium dose meets the threshold (≥15% NRV per serving), but the **electrolyte quantities are entirely absent from the listing** — so substantiation cannot be confirmed without a manual check of the label. 
+
+> 💡 LMNT's well-known formulation is 1000mg sodium / 200mg potassium / 60mg magnesium. If those figures are accurate, the magnesium dose (60mg = ~16% NRV) *just* meets the threshold — but this should be verified and surfaced explicitly.
+
+---
+
+### 🟢 What Is Internally Consistent
+- The three flavour-linked ingredients (Malic Acid, Citric Acid, multiple natural flavors) are plausibly consistent with the four named flavours (Watermelon Salt, Citrus Salt, Lemonade, Raspberry Salt).
+- The magnesium claim ties correctly to **Magnesium Malate** in the ingredient list.
+- Rating (4.9/5, 447 reviews) is a strong trust signal and not contradicted anywhere.
+- Suggested use (mix with 500ml water) is clear and internally consistent.
+
+---
+
+### 📋 Summary Table
+
+| Issue | Type | Severity | Action |
+|---|---|---|---|
+| `Â` artefact in 2 claims | Data/encoding error | 🔴 High | Fix encoding in CMS immediately |
+| Sweeteners/flavours unmentioned | Misleading omission | 🟡 Medium | Add "naturally sweetened with stevia" |
+| Fatigue claim unverifiable (no mg quantities) | Substantiation gap | 🟡 Medium | Add per-serve electrolyte breakdown |
+
+Want me to draft a corrected product description that addresses all three issues and send it to the HITL approval queue?
 
 ## Run metadata
 
 - Iterations: 2
-- Total latency: 24,383 ms
-- Tokens: 3,909 input / 1,022 output (cache_read: 2,754)
+- Total latency: 22,455 ms
+- Tokens: 3,505 input / 1,056 output (cache_read: 3,100)
 - Model: claude-sonnet-4-6
 
 ---
-*Tools used: `check_consistency`, `cluster_review_themes`, `score_images` · Surface: Streamlit chat*
+*Tools used: `check_consistency`, `cluster_review_themes`, `evaluate_listing_quality` · Surface: Streamlit chat*

@@ -4,7 +4,7 @@ A natural-language agent for the Healf health & wellness marketplace. Load any H
 
 ## Status
 
-✅ **Feature-complete.** 87 tests passing. Tier 1–4 + accuracy waves (16–19) + Editorial Wellness UI.
+✅ **Feature-complete.** 102 tests passing. Tier 1–4 + accuracy waves (16–19) + Editorial Wellness UI.
 
 ## Architecture
 
@@ -13,9 +13,9 @@ Surfaces:   Streamlit chat  │  MCP server (FastMCP)  │  HTTP webhook (FastAP
                              ↓
 Agent core: Anthropic SDK tool-use loop (claude-sonnet-4-6)
                              ↓
-Tools:      fetch_product · fetch_reviews_full · check_field · benchmark_against_category
-            cluster_review_themes · score_images · check_consistency · evaluate_listing_quality
-            draft_rewrite · enqueue_hitl · compare_products
+Tools:      fetch_product · check_field · benchmark_against_category · cluster_review_themes
+            score_images · check_consistency · evaluate_listing_quality · find_similar_products
+            compare_products · draft_rewrite · enqueue_hitl
                              ↓
 Storage:    SQLite  (products · reviews · corpus+embeddings · hitl_queue · eval_runs · review_themes)
 ```
@@ -24,8 +24,8 @@ Storage:    SQLite  (products · reviews · corpus+embeddings · hitl_queue · e
 
 - **11 agent tools** spanning Navigate / Ingest / Evaluate / Act — ingredient lookups, rubric evaluation, image scoring via Gemini Vision, review clustering, copy rewriting, cross-product comparison, and HITL queue
 - **Three surfaces:** Streamlit chat, MCP server (FastMCP stdio), FastAPI webhook + n8n catalog-audit workflow
-- **150-product corpus** with OpenAI embeddings for kNN benchmarking, shipped as `corpus.sqlite`
-- **Persistent multi-session chat history** (SQLite) with full debug bundle per response (per-iteration prompts, tokens, latency)
+- **6077-product corpus** with OpenAI embeddings for kNN benchmarking, shipped as `corpus.sqlite`
+- **Persistent multi-session chat history** (SQLite) with per-iteration prompts, tokens, and latency captured to SQLite for replay
 - **HITL approval queue** for AI-drafted copy improvements (`pages/hitl.py`)
 
 ## Quick Start
@@ -45,7 +45,7 @@ python -m uv run streamlit run app.py
 | `ANTHROPIC_API_KEY` | Agent LLM + eval LLM judge | Core agent, evals (eval-007, eval-009) |
 | `OPENAI_API_KEY` | Corpus embeddings (text-embedding-3-small) | Corpus kNN, benchmark, cluster |
 | `GEMINI_API_KEY` | Image scoring (Gemini 2.5 Flash) | `score_images` (eval-006) |
-| `YOTPO_APP_KEY` | Yotpo review API | `fetch_reviews_full` |
+| `YOTPO_APP_KEY` | Yotpo review API | `cluster_review_themes` (review fetching) |
 
 `HEALF_USER_AGENT` is optional (sensible default included in `.env.example`).
 
@@ -63,7 +63,7 @@ Persistent multi-session history, Editorial Wellness theme (Fraunces + Manrope, 
 ```bash
 python -m uv run python mcp_server.py
 ```
-Stdio transport. Clients (Claude Desktop, Claude Code, n8n MCP node) call `set_current_product(url)` once, then any of the 10 agent tools.
+Stdio transport. Clients (Claude Desktop, Claude Code, n8n MCP node) call `set_current_product(url)` once, then any of the 12 MCP tools.
 
 ### 3. Webhook + n8n
 ```bash
@@ -84,13 +84,13 @@ See `examples/` for annotated walkthroughs of the seven core tool paths:
 
 | File | Prompt | Tools fired |
 |------|--------|-------------|
-| `01-ingredient-check.md` | "Does this have sodium?" | `check_field` |
-| `02-full-evaluation.md` | "Evaluate this listing" | `evaluate_listing_quality`, `benchmark_against_category`, `cluster_review_themes` |
+| `01-ingredient-check.md` | "Does this have sodium?" | _(answered from product context)_ |
+| `02-full-evaluation.md` | "Evaluate this listing" | `evaluate_listing_quality`, `benchmark_against_category`, `cluster_review_themes`, `score_images` |
 | `03-image-score.md` | "How good are the product images?" | `score_images` |
-| `04-rewrite.md` | "Draft a better product description" | `draft_rewrite`, `enqueue_hitl` |
-| `05-compare.md` | "Compare LMNT vs Humantra electrolytes" | `compare_products` |
-| `06-consistency.md` | "Are the claims consistent across the listing?" | `check_consistency` |
-| `07-review-themes.md` | "What do customers love and hate?" | `cluster_review_themes`, `fetch_reviews_full` |
+| `04-rewrite.md` | "Draft a better product description" | `cluster_review_themes`, `score_images`, `check_consistency`, `benchmark_against_category`, `draft_rewrite`, `enqueue_hitl` |
+| `05-compare.md` | "Compare LMNT vs Humantra electrolytes" | `fetch_product`, `score_images`, `check_consistency`, `cluster_review_themes`, `compare_products` |
+| `06-consistency.md` | "Are the claims consistent across the listing?" | `check_consistency`, `cluster_review_themes`, `evaluate_listing_quality` |
+| `07-review-themes.md` | "What do customers love and hate?" | `cluster_review_themes` |
 
 ## Roadmap
 
