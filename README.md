@@ -103,3 +103,18 @@ This MVP demonstrates the core Navigate / Ingest / Evaluate / Act loop. The natu
 | 3 | **SEO + completeness bot** — benchmarks each listing against top-ranked competitors, generates structured completeness scores and keyword gap reports |
 
 Beyond month 3: brand onboarding assistant, cross-category comparison agent, review-insight digest, image quality monitor.
+
+## Technical Improvements
+
+Areas identified for a production hardening pass:
+
+| Area | Improvement |
+|------|-------------|
+| **Latency** | Stream agent responses token-by-token (Streamlit `write_stream`) so users see output immediately instead of waiting for the full turn |
+| **Latency** | Fan out independent tool calls in parallel (e.g. `benchmark_against_category` + `cluster_review_themes` in a single evaluation pass) |
+| **Caching** | Cache fetched product data and tool results per URL within a session to avoid redundant Playwright + API round-trips |
+| **Caching** | Cache OpenAI embeddings for repeated query strings so corpus kNN lookups skip the embedding call on re-runs |
+| **Data freshness** | Schedule a nightly corpus rebuild (n8n cron → `scripts/build_corpus.py`) so the 6077-product benchmark dataset stays current as Healf's catalogue changes |
+| **Reliability** | Add exponential backoff + retry for Playwright page fetches, Yotpo, Gemini Vision, and OpenAI embedding calls |
+| **Multi-user** | Replace module-level `_current_product` state in the MCP server with a per-session context so multiple clients can operate concurrently without clobbering each other |
+| **Observability** | Emit structured logs (OpenTelemetry or a lightweight sink) for each tool call — latency, token usage, cache hit/miss — to support production monitoring |
