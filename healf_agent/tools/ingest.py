@@ -5,7 +5,7 @@ import html as _html
 import json
 import re
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from selectolax.parser import HTMLParser
 
@@ -79,6 +79,35 @@ _SHOPIFY_IMG_RE = re.compile(
     r'https://(?:cdn\.shopify\.com/s/files|f\d+\.backblazeb2\.com)/[^\s"\\]+\.(?:png|jpe?g|webp)',
     re.IGNORECASE,
 )
+_NEXT_IMAGE_RE = re.compile(r'/_next/image\?url=([^&"\\\s]+)')
+_PRELOAD_IMG_LINK_RE = re.compile(
+    r'<link[^>]+rel="preload"[^>]*as="image"[^>]*>', re.IGNORECASE
+)
+
+
+def _gallery_image_urls_from_html(html: str) -> list[str]:
+    """Decode gallery image URLs from Next.js `_next/image` preload links.
+
+    Healf renders PDP gallery images via `/_next/image?url=<encoded cdn url>`.
+    These live in the raw HTML (often only in <link rel=preload as=image>),
+    NOT in the RSC flight — so they are missed by flight-only extraction.
+    Scoped to preload links to exclude recommendation/cross-sell thumbnails.
+    Returns decoded cdn.shopify.com/backblaze URLs (query stripped), in order,
+    deduped. Never raises.
+    """
+    try:
+        preload_blob = "".join(_PRELOAD_IMG_LINK_RE.findall(html)) or html
+        seen: set[str] = set()
+        out: list[str] = []
+        for enc in _NEXT_IMAGE_RE.findall(preload_blob):
+            dec = unquote(enc).split("?")[0]
+            low = dec.lower()
+            if ("cdn.shopify.com" in low or "backblazeb2.com" in low) and dec not in seen:
+                seen.add(dec)
+                out.append(dec)
+        return out
+    except Exception:
+        return []
 
 
 def _extract_variant_base_image_urls(flight_text: str) -> list[str]:
@@ -488,22 +517,28 @@ def load_full_product(url: str) -> Product:
     html_text = fetch_product_page(url)
     p = parse_product(html_text, url=url)
 
-    # Merge image sources: JSON-LD hero + variant_base_images + CDN fallback
+    # Merge image sources: gallery preload links (raw HTML) + JSON-LD hero + variant_base_images + CDN fallback
     flight_text = extract_rsc_flight(html_text)
-    merged_urls: list[str] = [str(img.url) for img in p.images]
-    seen_urls: set[str] = set(merged_urls)
 
-    variant_urls = _extract_variant_base_image_urls(flight_text)
-    for u in variant_urls:
-        if u not in seen_urls:
-            seen_urls.add(u)
+    merged_urls: list[str] = []
+    seen_bases: set[str] = set()
+
+    def _add(u: str) -> None:
+        base = u.split("?")[0]
+        if base and base not in seen_bases:
+            seen_bases.add(base)
             merged_urls.append(u)
 
-    if len(merged_urls) < 2:
+    # Gallery first (ordered like the page, most complete), then supplements.
+    for u in _gallery_image_urls_from_html(html_text):
+        _add(u)
+    for img in p.images:                          # JSON-LD hero
+        _add(str(img.url))
+    for u in _extract_variant_base_image_urls(flight_text):
+        _add(u)
+    if len(merged_urls) < 2:                       # last-resort safety net
         for u in _fallback_shopify_image_urls(flight_text):
-            if u not in seen_urls:
-                seen_urls.add(u)
-                merged_urls.append(u)
+            _add(u)
 
     meta = extract_metafields(html_text)
     updates: dict[str, Any] = {"raw_metafields": meta or None}

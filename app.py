@@ -46,6 +46,41 @@ def _relative_time(ts: float) -> str:
     return f"{int(diff // 86400)}d ago"
 
 
+def _render_diagnostics(trace: dict | None, debug: dict | None) -> None:
+    if st.session_state.get("show_trace") and trace:
+        with st.expander("tool trace", expanded=False):
+            st.json(trace)
+    if debug and st.session_state.get("show_debug"):
+        with st.expander("debug — prompts & messages", expanded=False):
+            st.markdown("**System prompt:**")
+            st.code(debug["system"], language="text")
+            if debug.get("injected_context"):
+                st.markdown("**Injected product context:**")
+                st.code(debug["injected_context"], language="text")
+            for i, it in enumerate(debug["iterations"]):
+                st.markdown(f"**Iteration {i} — messages sent:**")
+                st.json(it["messages_snapshot"])
+                st.markdown(f"**Iteration {i} — response:**")
+                st.json(it["response_content"])
+    if debug and st.session_state.get("show_tokens"):
+        with st.expander("debug — usage & timing", expanded=False):
+            rows = [
+                {
+                    "iter": it["iter"],
+                    "latency_ms": it["latency_ms"],
+                    "input_tokens": it["usage"]["input_tokens"],
+                    "output_tokens": it["usage"]["output_tokens"],
+                    "cache_read": it["usage"]["cache_read_input_tokens"],
+                    "stop_reason": it["stop_reason"],
+                    "model": it["model"],
+                }
+                for it in debug["iterations"]
+            ]
+            if rows:
+                import pandas as pd
+                st.dataframe(pd.DataFrame(rows))
+
+
 def _load_session(storage: Storage, session_id: int) -> None:
     messages = storage.get_session_messages(session_id)
     st.session_state["session_id"] = session_id
@@ -147,6 +182,16 @@ def chat_page() -> None:
         url = st.text_input("Product URL", value=_DEFAULT_URL, label_visibility="collapsed")
         fetch = st.button("Fetch product", use_container_width=True, type="primary")
 
+        # Diagnostics cog
+        st.markdown(
+            '<div style="border-top: 1px solid #D9D2C0; margin: 12px 0 8px;"></div>',
+            unsafe_allow_html=True,
+        )
+        with st.popover("⚙️  Diagnostics", use_container_width=True):
+            st.toggle("Tool trace", value=False, key="show_trace")
+            st.toggle("Debug — prompts & messages", value=False, key="show_debug")
+            st.toggle("Token tracker — usage & timing", value=False, key="show_tokens")
+
     # Handle fetch
     if fetch and url:
         with st.spinner("Fetching product…"):
@@ -232,6 +277,7 @@ def chat_page() -> None:
     for msg in messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["text"])
+            _render_diagnostics(msg.get("trace"), msg.get("debug"))
 
     # Input — check for a pending chip question first
     pending = st.session_state.pop("pending_question", None)
@@ -257,6 +303,7 @@ def chat_page() -> None:
 
         # Update session title from first user message
         existing = st.session_state.get("messages", [])
+        history = [{"role": m["role"], "content": m["text"]} for m in existing]
         if not any(m["role"] == "user" for m in existing):
             storage.update_session_title(session_id, user_input[:32])
 
@@ -277,8 +324,10 @@ def chat_page() -> None:
                     user_message=agent_message,
                     product=product,
                     injected_product_context=product_ctx,
+                    history=history,
                 )
             st.markdown(answer)
+            _render_diagnostics(trace, debug)
 
         storage.append_chat_message(session_id, "assistant", answer, trace, debug)
         st.session_state["messages"].append(

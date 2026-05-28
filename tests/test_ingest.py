@@ -16,6 +16,7 @@ from healf_agent.tools.ingest import (
     _split_ingredient_blob_by_flavour,
     _extract_descriptive_text,
     _extract_variant_base_image_urls,
+    _gallery_image_urls_from_html,
     _claims_from_old_description,
     _RSC_PTR_RE,
 )
@@ -273,3 +274,28 @@ def test_tag_values_from_flight_lmnt() -> None:
 def test_category_from_collections_filters_curator_lists() -> None:
     flight = '"collections":{"edges":[{"node":{"handle":"annas-collection"}},{"node":{"handle":"electrolytes"}}]}'
     assert _category_from_collections(flight) == "Electrolytes"
+
+
+def test_gallery_image_urls_from_next_image_preload() -> None:
+    html = (
+        '<link rel="preload" as="image" '
+        'imageSrcSet="/_next/image?url=https%3A%2F%2Fcdn.shopify.com%2Fs%2Ffiles%2Fa%2FPDP-promise.png%3Fv%3D1&w=640&q=75">'
+        '<link rel="preload" as="image" '
+        'href="/_next/image?url=https%3A%2F%2Fcdn.shopify.com%2Fs%2Ffiles%2Fa%2Fhero.jpg&w=16&q=75">'
+    )
+    urls = _gallery_image_urls_from_html(html)
+    assert "https://cdn.shopify.com/s/files/a/PDP-promise.png" in urls
+    assert "https://cdn.shopify.com/s/files/a/hero.jpg" in urls
+    assert len(urls) == 2  # query stripped, deduped
+
+
+def test_gallery_image_urls_base_dedup() -> None:
+    # Two preload links pointing to the same image, one with a ?v= query string.
+    html = (
+        '<link rel="preload" as="image" '
+        'href="/_next/image?url=https%3A%2F%2Fcdn.shopify.com%2Fs%2Ffiles%2Fa%2Fhero.jpg%3Fv%3D1&w=640&q=75">'
+        '<link rel="preload" as="image" '
+        'href="/_next/image?url=https%3A%2F%2Fcdn.shopify.com%2Fs%2Ffiles%2Fa%2Fhero.jpg&w=16&q=75">'
+    )
+    urls = _gallery_image_urls_from_html(html)
+    assert urls == ["https://cdn.shopify.com/s/files/a/hero.jpg"]

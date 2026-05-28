@@ -294,3 +294,30 @@ def test_run_agent_turn_returns_debug_with_usage() -> None:
     assert it["stop_reason"] == "end_turn"
     assert "latency_ms" in it
     assert it["latency_ms"] >= 0
+
+
+def test_run_agent_turn_threads_history() -> None:
+    """Prior conversation turns are prepended to messages sent to the model."""
+    from unittest.mock import MagicMock
+
+    fake_client = MagicMock()
+    fake_client.messages.create.return_value = MagicMock(
+        stop_reason="end_turn",
+        content=[MagicMock(type="text", text="Here is the draft.")],
+    )
+    history = [
+        {"role": "user", "content": "compare this product"},
+        {"role": "assistant", "content": "...would you like me to draft a description?"},
+    ]
+    answer, _, _ = run_agent_turn(
+        client=fake_client,
+        model="claude-sonnet-4-6",
+        user_message="Go ahead",
+        product=None,
+        history=history,
+    )
+    sent = fake_client.messages.create.call_args.kwargs["messages"]
+    assert [m["role"] for m in sent] == ["user", "assistant", "user"]
+    assert sent[0]["content"] == "compare this product"
+    assert sent[-1]["content"] == "Go ahead"
+    assert "draft" in answer.lower()

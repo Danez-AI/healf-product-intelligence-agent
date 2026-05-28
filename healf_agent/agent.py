@@ -36,11 +36,15 @@ def run_agent_turn(
     system: str = SYSTEM_PROMPT,
     max_iters: int = 8,
     injected_product_context: str = "",
+    history: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     """Run a single agent turn (tool-use loop) and return (final_text, tool_trace, debug)."""
     trace: list[dict[str, Any]] = []
     debug_iterations: list[dict[str, Any]] = []
-    messages: list[dict[str, Any]] = [{"role": "user", "content": user_message}]
+    messages: list[dict[str, Any]] = [
+        {"role": h["role"], "content": h["content"]} for h in (history or [])
+    ]
+    messages.append({"role": "user", "content": user_message})
     for _ in range(max_iters):
         t0 = time.perf_counter()
         resp = client.messages.create(
